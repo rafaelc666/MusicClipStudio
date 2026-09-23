@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "scene_id": "vox-demo-01",
+  "duration": 8,
+  "format": "16:9",
+  "profile": "vox-editorial",
+  "layers": [
+    {
+      "id": "background",
+      "type": "image",
+      "role": "background",
+      "source": "asset://background.jpg",
+      "z_index": 0,
+      "animation": "slow-pan"
+    },
+    {
+      "id": "paper-texture",
+      "type": "texture",
+      "role": "atmosphere",
+      "source": "asset://paper-halftone.png",
+      "opacity": 0.18,
+      "blend_mode": "multiply",
+      "z_index": 10,
+      "animation": "drift"
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "role": "editorial",
+      "content": "O detalhe que muda a história",
+      "z_index": 20,
+      "animation": "headline-in"
+    },
+    {
+      "id": "stat-card",
+      "type": "infographic",
+      "role": "data",
+      "value": 860,
+      "suffix": " V",
+      "label": "descarga registrada",
+      "z_index": 30,
+      "animation": "count-up"
+    },
+    {
+      "id": "waveform",
+      "type": "waveform",
+      "role": "evidence",
+      "label": "padrão detectado",
+      "z_index": 25,
+      "animation": "pulse"
+    },
+    {
+      "id": "lower-third",
+      "type": "lower_third",
+      "role": "source",
+      "speaker_name": "Arquivo Vox",
+      "speaker_title": "Demonstração editorial",
+      "z_index": 35,
+      "animation": "slide-in"
+    },
+    {
+      "id": "foreground",
+      "type": "shape",
+      "role": "depth",
+      "z_index": 40,
+      "animation": "parallax-front"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+# ── Segredos ──────────────────────────────────────────────
+.env
+.env.local
+*.key
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+venv/
+.venv/
+
+# ── Node / Next.js ────────────────────────────────────────
+node_modules/
+.next/
+out/
+next-env.d.ts
+
+# ── Saídas e mídia gerada ─────────────────────────────────
+output/
+producao/
+gerador_clipes_musicais/output/
+*_temp/
+_temp_frames*/
+*.mp4
+*.wav
+*.mp3
+!assets/**/*.mp3
+clipe_teste_gerador.mp4
+
+# ── Logs e temporários ────────────────────────────────────
+*.log
+_e2e*.log
+_backend.log
+_frontend.log
+_req_tmp/
+.workbuddy-ai/
+
+# ── Backups e lixeira locais ──────────────────────────────
+_backup_*/
+lixeira/
+
+# ── Banco local ───────────────────────────────────────────
+output/projetos.db
+*.sqlite3
+
+# ── SO ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Segredo local do auth (chave Fernet) ───────────────
+.mcs_secret_key
+PEDIDOS.md
+
+# ── Frontend é repo próprio (não aninhar) ────────────────
+musicclipstudio-landing/

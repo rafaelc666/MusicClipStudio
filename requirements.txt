@@ -1,0 +1,23 @@
+# MusicClipStudio — dependências Python (backend + engine)
+# Instale com: pip install -r requirements.txt
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+
+# Motor de vídeo / mídia
+moviepy
+numpy
+Pillow
+playwright          # render HTML→frames (npx playwright install chromium)
+
+# Bancos de mídia / HTTP
+requests
+
+# Criptografia das chaves por usuário
+cryptography
+
+# Transcrição (Whisper)
+faster-whisper

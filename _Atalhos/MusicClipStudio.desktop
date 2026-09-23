@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=MusicClipStudio
+GenericName=Gerador de clipes musicais
+Comment=Abre o Studio web (sobe a stack automaticamente se necessário)
+Exec=/run/media/rafael/Novo volume/dev-projetos/MusicClipStudio/_Atalhos/abrir_studio.sh
+Icon=/run/media/rafael/Novo volume/dev-projetos/MusicClipStudio/_Atalhos/musicclipstudio-icon.png
+Path=/run/media/rafael/Novo volume/dev-projetos/MusicClipStudio/_Atalhos
+Terminal=false
+Categories=AudioVideo;Video;
+StartupNotify=true

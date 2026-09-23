@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Debug</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 1920px;
+            height: 1080px;
+            background: #1A1A2E;
+            overflow: hidden;
+            font-family: 'Montserrat', sans-serif;
+        }
+        
+        /* Cada beat em posição absoluta */
+        .beat {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 72px;
+            font-weight: 900;
+            color: white;
+        }
+        
+        /* Beat 0: aparece de 0-5s */
+        .beat-0 {
+            background: #1A1A2E;
+            animation: showBeat 28s forwards;
+            animation-delay: 0s;
+        }
+        
+        /* Beat 1: aparece de 6-11s */
+        .beat-1 {
+            background: #FF3333;
+            animation: showBeat 28s forwards;
+            animation-delay: 6s;
+        }
+        
+        /* Beat 2: aparece de 12-17s */
+        .beat-2 {
+            background: #16213E;
+            animation: showBeat 28s forwards;
+            animation-delay: 12s;
+        }
+        
+        /* Beat 3: aparece de 18-23s */
+        .beat-3 {
+            background: #1A1A2E;
+            animation: showBeat 28s forwards;
+            animation-delay: 18s;
+        }
+        
+        /* Beat 4: aparece de 24-28s */
+        .beat-4 {
+            background: #FFCC00;
+            color: #1A1A2E;
+            animation: showBeat 28s forwards;
+            animation-delay: 24s;
+        }
+        
+        @keyframes showBeat {
+            0%, 10% { opacity: 0; visibility: hidden; }
+            15%, 85% { opacity: 1; visibility: visible; }
+            95%, 100% { opacity: 0; visibility: hidden; }
+        }
+    </style>
+</head>
+<body>
+    <div class="beat beat-0">O SEGREDO DO TEMPO</div>
+    <div class="beat beat-1">87</div>
+    <div class="beat beat-2">O UNIVERSO TEM 93 BILHOES</div>
+    <div class="beat beat-3">DR. ALBERT EINSTEIN</div>
+    <div class="beat beat-4">ATE A PROXIMA</div>
+</body>
+</html>
