@@ -21,3 +21,5 @@ cryptography
 
 # Transcrição (Whisper)
 faster-whisper
+# Upload de arquivos (multipart/form-data)
+python-multipart

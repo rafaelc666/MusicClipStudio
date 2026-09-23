@@ -696,6 +696,21 @@ def transcrever(payload: TranscribePayload) -> dict[str, Any]:
         raise HTTPException(500, detail=f"Erro na transcrição: {e}")
 
     if not resultado.ok:
+        # ⚠️ CORRIGIDO (23/09/2026): áudio INSTRUMENTAL não é erro — é caso
+        # normal de produto (o Chopin do usuário, trilhas sem voz). Antes
+        # devolvia 500 "Nenhuma fala detectada" e a UI mostrava falha.
+        # Agora devolve 200 com ok=false e `instrumental=true`; a UI avisa
+        # "clipe segue sem legenda" como informação, não como falha.
+        sem_fala = "fala" in (resultado.erro or "").lower()
+        if sem_fala:
+            return {
+                "ok": False,
+                "instrumental": True,
+                "total_linhas": 0,
+                "linhas": [],
+                "texto_completo": "",
+                "mensagem": resultado.erro or "Nenhuma fala detectada — o clipe segue sem legenda.",
+            }
         raise HTTPException(
             500,
             detail=resultado.erro or "A transcrição não produziu nenhum segmento.",
