@@ -668,6 +668,77 @@ def listar_uploads_recentes(limite: int = 8) -> dict[str, Any]:
     return {"ok": True, "total": len(itens), "itens": itens}
 
 
+@app.post("/api/legenda/transcrever-job", tags=["legenda"])
+def transcrever_job(payload: TranscribePayload) -> dict[str, Any]:
+    """⚠️ NOVO (23/09/2026): transcrição como JOB assíncrono.
+
+    O proxy de dev do Next abortava respostas lentas (~60s de Whisper) e o
+    navegador recebia 500 mesmo com o backend OK. Padrão idêntico ao do
+    render: cria o job, roda em thread, e a UI consulta /api/jobs/{id}.
+    """
+    if not _BACKBONE_IMPORTED:
+        raise HTTPException(500, detail=f"Backbone não carregado: {_BACKBONE_ERROR}")
+    caminho = UPLOAD_DIR / Path(payload.audio_path).name
+    if not caminho.exists():
+        raise HTTPException(404, detail=f"Áudio não encontrado: {caminho}")
+
+    job_id = uuid.uuid4().hex[:12]
+    _jobs[job_id] = {
+        "id": job_id,
+        "tipo": "transcricao",
+        "status": "queued",
+        "progress": 0,
+        "events": [],
+        "created_at": time.time(),
+    }
+
+    def _rodar():
+        job = _jobs[job_id]
+        job["status"] = "running"
+        job["progress"] = 5
+        try:
+            from MusicClipStudio.transcricao import transcrever
+            job["progress"] = 20
+            resultado = transcrever(str(caminho))
+            job["progress"] = 90
+            if not resultado.ok:
+                sem_fala = "fala" in (resultado.erro or "").lower()
+                if sem_fala:
+                    # Instrumental: caso NORMAL de produto, não erro.
+                    job["status"] = "done"
+                    job["result"] = {
+                        "ok": False,
+                        "instrumental": True,
+                        "total_linhas": 0,
+                        "linhas": [],
+                        "texto_completo": "",
+                        "mensagem": resultado.erro or "Nenhuma fala detectada — o clipe segue sem legenda.",
+                    }
+                    job["progress"] = 100
+                    return
+                job["status"] = "error"
+                job["error"] = resultado.erro or "A transcrição não produziu nenhum segmento."
+                return
+            linhas = [s.para_dict() for s in resultado.segmentos]
+            job["result"] = {
+                "ok": True,
+                "total_linhas": len(linhas),
+                "linhas": linhas,
+                "texto_completo": resultado.texto_completo,
+                "idioma": resultado.idioma,
+                "duracao_audio": resultado.duracao_audio,
+                "modelo": resultado.modelo,
+            }
+            job["status"] = "done"
+            job["progress"] = 100
+        except Exception as e:
+            job["status"] = "error"
+            job["error"] = str(e)
+
+    threading.Thread(target=_rodar, daemon=True).start()
+    return {"ok": True, "job_id": job_id}
+
+
 @app.post("/api/legenda/transcrever", tags=["legenda"])
 def transcrever(payload: TranscribePayload) -> dict[str, Any]:
     """Roda Whisper no áudio. Requer o caminho salvo por /upload/audio."""
