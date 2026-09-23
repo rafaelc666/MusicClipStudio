@@ -21,6 +21,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import sqlite3
 import threading
@@ -75,8 +76,21 @@ class AuthStore:
         # arquivo não lê as chaves sem o .secret_key.
         self._secret_path = self.db_path.parent / ".mcs_secret_key"
         if not self._secret_path.exists():
+            # ⚠️ HARDENING (23/09/2026): segredo criado já com 0600 (só o dono
+            # lê). Em multiusuário do SO, outro usuário do sistema não lê.
             self._secret_path.write_bytes(Fernet.generate_key())
+            os.chmod(self._secret_path, 0o600)
+        else:
+            try:
+                os.chmod(self._secret_path, 0o600)  # corrige instalações antigas
+            except OSError:
+                pass
         self._fernet = Fernet(self._secret_path.read_bytes().strip())
+        # O banco de usuários também: contém hashes + chaves criptografadas.
+        try:
+            os.chmod(self.db_path, 0o600)
+        except OSError:
+            pass
 
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
@@ -127,8 +141,10 @@ class AuthStore:
         username = username.strip()
         if len(username) < 3:
             raise ValueError("Nome de usuário precisa de ao menos 3 caracteres")
-        if len(senha) < 4:
-            raise ValueError("Senha precisa de ao menos 4 caracteres")
+        if len(senha) < 8:
+            # ⚠️ HARDENING (23/09/2026): era 4. Mesmo local, a conta guarda as
+            # chaves de API do dono — mínimo decente.
+            raise ValueError("Senha precisa de ao menos 8 caracteres")
         salt = secrets.token_hex(16)
         with self._lock:
             ja = self._conn.execute(
@@ -152,13 +168,48 @@ class AuthStore:
             ).fetchone()
 
     def autenticar(self, username: str, senha: str) -> dict[str, Any]:
+        """Login com limite de tentativas (anti força bruta).
+
+        ⚠️ HARDENING (23/09/2026): 5 erros = conta bloqueada por 10 min.
+        Em app LOCAL o risco é baixo, mas o app roda em 127.0.0.1 e qualquer
+        processo da máquina pode reaching a API — o limite custa nada e fecha
+        a porta da força bruta offline.
+        """
+        agora = int(time.time())
+        with self._lock:
+            estado = self._tentativas.get(username, (0, 0))
+            erros, bloqueado_ate = estado
+            if agora < bloqueado_ate:
+                restante = (bloqueado_ate - agora + 59) // 60
+                raise ValueError(
+                    "Muitas tentativas — tente de novo em "
+                    f"{restante} minuto" + ("s" if restante > 1 else "")
+                )
         row = self._usuario_por_username(username)
         if not row:
+            self._registrar_falha(username, agora)
             raise ValueError("Usuário ou senha incorretos")
         calc = self._hash_senha(senha, row["salt"])
         if not hmac.compare_digest(calc, row["senha_hash"]):
+            self._registrar_falha(username, agora)
             raise ValueError("Usuário ou senha incorretos")
+        # Sucesso: zera o contador
+        with self._lock:
+            self._tentativas.pop(username, None)
         return {"id": row["id"], "username": row["username"]}
+
+    # ⚠️ HARDENING (23/09/2026): limitador de tentativas por usuário, em
+    # memória (processo). 5 erros → 10 min de bloqueio.
+    MAX_TENTATIVAS = 5
+    BLOQUEIO_S = 10 * 60
+    _tentativas: dict[str, tuple[int, int]] = {}
+
+    def _registrar_falha(self, username: str, agora: int) -> None:
+        with self._lock:
+            erros, _ = self._tentativas.get(username, (0, 0))
+            erros += 1
+            bloqueado_ate = agora + self.BLOQUEIO_S if erros >= self.MAX_TENTATIVAS else 0
+            self._tentativas[username] = (erros, bloqueado_ate)
 
     # ── sessões ─────────────────────────────────────────────────────────
 

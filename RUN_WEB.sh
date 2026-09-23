@@ -43,7 +43,14 @@ spawn "$LOG_B" "$PYTHON" -m uvicorn backend.app.main:app --host 127.0.0.1 --port
 
 echo "[2/2] frontend → http://127.0.0.1:3100  (log: $LOG_F)"
 cd musicclipstudio-landing
-spawn "$LOG_F" ./node_modules/.bin/next dev --hostname 127.0.0.1 --port 3100 || { echo "falhou"; exit 1; }
+if [ ! -d .next ]; then
+  # ⚠️ 23/09/2026: primeira execução faz o BUILD de produção uma vez
+  # (`next dev` em modo desenvolvimento é lento, expõe erros internos e
+  # não é adequado para uso contínuo).
+  echo "   (primeira execução: compilando produção — leva 1–2 min)"
+  ./node_modules/.bin/next build >/dev/null 2>&1 || { echo "falhou o build (veja npm run build)"; exit 1; }
+fi
+spawn "$LOG_F" ./node_modules/.bin/next start --hostname 127.0.0.1 --port 3100 || { echo "falhou"; exit 1; }
 cd ..
 
 sleep 4
