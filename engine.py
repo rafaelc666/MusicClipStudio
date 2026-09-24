@@ -163,6 +163,7 @@ class MusicClipEngine:
     def render_html(
         self,
         project: MusicClipProject,
+        audio_path: Optional[str] = None,
     ) -> Path:
         """
         Renderiza projeto como HTML usando scene_engine.
@@ -297,7 +298,7 @@ class MusicClipEngine:
 
             # 3. Renderizar HTML → vídeo (scene_engine pipeline)
             self._progress(30, "render", "Renderizando cena HTML...")
-            html_path = self.render_html(project)
+            html_path = self.render_html(project, audio_path=audio_path)
 
             # 4. HTML → Vídeo via Playwright
             try:
