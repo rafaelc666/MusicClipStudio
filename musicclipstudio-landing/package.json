@@ -1,0 +1,39 @@
+{
+  "name": "musicclipstudio-landing",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3100",
+    "build": "next build",
+    "start": "next start --port 3100",
+    "lint": "eslint",
+    "tsc": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.3.5",
+    "next-intl": "^4.14.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "lucide-react": "^0.479.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.0.2",
+    "class-variance-authority": "^0.7.1",
+    "sonner": "^2.0.1",
+    "@radix-ui/react-slot": "^1.1.2",
+    "@radix-ui/react-progress": "^1.1.2",
+    "@radix-ui/react-tabs": "^1.1.4",
+    "@radix-ui/react-scroll-area": "^1.2.4",
+    "framer-motion": "^12.4.10",
+    "react-dropzone": "^14.3.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.5",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

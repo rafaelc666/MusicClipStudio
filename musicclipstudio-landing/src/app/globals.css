@@ -1,0 +1,484 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Minimalista · Cinza + Neon Ciano
+   Inspirado em Apple / Spline / Linear
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* Backgrounds (Greyscale profundo) */
+  --bg-0: #08090B;           /* pano de fundo mais profundo */
+  --bg-1: #0E1013;           /* superfícies de página */
+  --bg-2: #15181D;           /* cards, painéis */
+  --bg-3: #1C2027;           /* inputs, hover de card */
+  --bg-4: #262B34;           /* divisórias suaves, bordas */
+
+  /* Foregrounds */
+  --fg-0: #F5F7FA;           /* títulos, forte contraste */
+  --fg-1: #C7CCD4;           /* texto corrido */
+  --fg-2: #8A919C;           /* secundário, labels */
+  --fg-3: #59606B;           /* placeholders, dica */
+
+  /* Accent — Neon Ciano (cian azulado brilhante) */
+  --neon:    #22D3EE;        /* ciano neon (cyan-400) */
+  --neon-2:  #38BDF8;        /* ciano vibrante (sky-400) */
+  --neon-3:  #0EA5E9;        /* ciano escuro (sky-500) */
+  --neon-dim:#0891B2;        /* ciano suave (cyan-600) */
+
+  /* Semânticos */
+  --ok:      #34D399;        /* emerald-400 */
+  --warn:    #FBBF24;        /* amber-400 */
+  --err:     #F87171;        /* red-400 */
+  --violet:  #A78BFA;        /* violet-400 (destaque raro) */
+
+  /* Medidas */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
+  /* Sombras */
+  --shadow-neon: 0 0 0 1px rgba(34,211,238,0.15),
+                 0 10px 30px -12px rgba(34,211,238,0.35);
+  --shadow-soft: 0 1px 0 rgba(255,255,255,0.02) inset,
+                 0 10px 30px -15px rgba(0,0,0,0.8);
+
+  /* ── v2 · Modernização (19/09/2026) ─────────────────────────
+     Camadas novas para dar profundidade, luz e movimento sem
+     quebrar nada do que já existia. Tudo aditivo. */
+
+  /* Superfícies com mais hierarquia */
+  --bg-elev:   #191D24;      /* card elevado acima do bg-2 */
+  --hairline:  rgba(255,255,255,0.07);   /* borda de 1px quase invisível */
+  --hairline-strong: rgba(255,255,255,0.12);
+
+  /* Acentos secundários (para mesh gradients) */
+  --aurora-1: #22D3EE;       /* ciano */
+  --aurora-2: #6366F1;       /* índigo */
+  --aurora-3: #A855F7;       /* púrpura */
+  --aurora-4: #06B6D4;       /* ciano profundo */
+
+  /* Gradientes prontos */
+  --grad-neon: linear-gradient(135deg, #22D3EE 0%, #38BDF8 42%, #818CF8 100%);
+  --grad-surface: linear-gradient(160deg, rgba(28,32,39,0.92) 0%, rgba(20,23,28,0.96) 100%);
+  --grad-border: linear-gradient(140deg, rgba(34,211,238,0.35), rgba(168,85,247,0.18) 50%, transparent 80%);
+
+  /* Sombras v2 */
+  --shadow-lift: 0 1px 0 rgba(255,255,255,0.04) inset,
+                 0 24px 48px -24px rgba(0,0,0,0.9);
+  --shadow-glow-sm: 0 0 24px -8px rgba(34,211,238,0.5);
+  --shadow-glow-md: 0 0 48px -12px rgba(34,211,238,0.55);
+  --shadow-inset-top: inset 0 1px 0 rgba(255,255,255,0.06);
+
+  /* Curvas de animação (mais "produto") */
+  --ease-out-expo: cubic-bezier(.16,1,.3,1);
+  --ease-spring:   cubic-bezier(.34,1.56,.64,1);
+}
+
+@theme inline {
+  /* Cores */
+  --color-bg-0: var(--bg-0);
+  --color-bg-1: var(--bg-1);
+  --color-bg-2: var(--bg-2);
+  --color-bg-3: var(--bg-3);
+  --color-bg-4: var(--bg-4);
+  --color-fg-0: var(--fg-0);
+  --color-fg-1: var(--fg-1);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-neon: var(--neon);
+  --color-neon-2: var(--neon-2);
+  --color-neon-3: var(--neon-3);
+  --color-neon-dim: var(--neon-dim);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+
+  /* Fontes (mantem Geist; fallback para mono) */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-geist-sans);
+
+  /* Radius */
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-feature-settings: "cv02","cv03","cv04","cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Utilitários globais (glass, grid, glow, botão neon)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Glassmorphism suave */
+.glass {
+  background: linear-gradient(180deg, rgba(28,32,39,0.85) 0%, rgba(21,24,29,0.85) 100%);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.glass-strong {
+  background: linear-gradient(180deg, rgba(38,43,52,0.9) 0%, rgba(28,32,39,0.92) 100%);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Grid de fundo estilo dashboard */
+.bg-studio-grid {
+  background-image:
+    linear-gradient(rgba(34,211,238,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,211,238,0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: center top;
+}
+
+.bg-noise {
+  background-image:
+    radial-gradient(ellipse at 20% -10%, rgba(34,211,238,0.08), transparent 50%),
+    radial-gradient(ellipse at 80% 110%, rgba(167,139,250,0.06), transparent 55%);
+}
+
+/* Glow neon em elemento focado/interativo */
+.neon-glow {
+  box-shadow: var(--shadow-neon);
+}
+
+.neon-glow-hover:hover {
+  box-shadow: var(--shadow-neon);
+  transform: translateY(-1px);
+}
+
+.soft-shadow { box-shadow: var(--shadow-soft); }
+
+/* Texto com gradiente neon */
+.text-gradient-neon {
+  background: linear-gradient(90deg, #22D3EE 0%, #38BDF8 50%, #A78BFA 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+
+/* Botão neon primário (estilo global fallback) */
+.btn-neon {
+  position: relative;
+  background: linear-gradient(180deg, #22D3EE 0%, #0EA5E9 100%);
+  color: #06141a;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1.1rem;
+  transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+  box-shadow: 0 0 0 1px rgba(34,211,238,0.5),
+              0 10px 30px -12px rgba(34,211,238,0.55);
+}
+.btn-neon:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 0 0 1px rgba(34,211,238,0.7),
+              0 14px 36px -14px rgba(34,211,238,0.7);
+}
+.btn-neon:active { transform: translateY(0); filter: brightness(0.98); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-1);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1.1rem;
+  transition: all .15s ease;
+}
+.btn-ghost:hover {
+  background: var(--bg-3);
+  border-color: rgba(34,211,238,0.25);
+  color: var(--fg-0);
+}
+
+/* Animações */
+@keyframes pulse-neon {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(34,211,238,0.15), 0 0 24px -6px rgba(34,211,238,0.35); }
+  50%      { box-shadow: 0 0 0 1px rgba(34,211,238,0.45), 0 0 40px -6px rgba(34,211,238,0.6); }
+}
+.animate-pulse-neon { animation: pulse-neon 2.4s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.02) 0%,
+    rgba(34,211,238,0.10) 50%,
+    rgba(255,255,255,0.02) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.8s infinite linear;
+}
+
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-4px); }
+}
+.animate-float { animation: float 5s ease-in-out infinite; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up .45s cubic-bezier(.2,.7,.2,1) both; }
+
+/* Scrollbar fina, elegante */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--bg-4);
+  border-radius: 999px;
+  border: 2px solid transparent;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--neon-dim); }
+
+/* Inputs padrão */
+input::placeholder, textarea::placeholder { color: var(--fg-3); }
+
+/* Selection */
+::selection {
+  background: rgba(34,211,238,0.28);
+  color: var(--fg-0);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   v2 · MODERNIZAÇÃO · 19/09/2026
+   Camadas aditivas: aurora mesh, cards com borda-gradiente,
+   spotlight que segue o mouse, tipografia display, skeletons.
+   Nada aqui sobrescreve as classes acima.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Aurora mesh de fundo (substitui o ruído plano) ── */
+.aurora-bg {
+  position: relative;
+  isolation: isolate;
+}
+.aurora-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 40% at 12% -5%,  rgba(34,211,238,0.14), transparent 62%),
+    radial-gradient(ellipse 50% 45% at 88% 8%,   rgba(99,102,241,0.12), transparent 60%),
+    radial-gradient(ellipse 55% 40% at 50% 108%, rgba(168,85,247,0.10), transparent 62%);
+  animation: aurora-drift 22s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1);        opacity: .9; }
+  50%  { transform: translate3d(-1.5%, 1%, 0) scale(1.04); opacity: 1; }
+  100% { transform: translate3d(1.5%, -1%, 0) scale(1);    opacity: .9; }
+}
+
+/* ── Card com borda em gradiente (técnica de mask) ── */
+.card-v2 {
+  position: relative;
+  border-radius: var(--radius-lg);
+  background: var(--grad-surface);
+  box-shadow: var(--shadow-lift);
+  transition: transform .35s var(--ease-out-expo),
+              box-shadow .35s var(--ease-out-expo);
+}
+.card-v2::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--grad-border);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: .6;
+  transition: opacity .35s var(--ease-out-expo);
+  pointer-events: none;
+}
+.card-v2:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift), var(--shadow-glow-md);
+}
+.card-v2:hover::before { opacity: 1; }
+
+/* ── Spotlight que segue o cursor (usar com onMouseMove) ── */
+.spotlight {
+  position: relative;
+  overflow: hidden;
+}
+.spotlight::after {
+  content: "";
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  left: var(--mx, 50%);
+  top: var(--my, 50%);
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(34,211,238,0.13), transparent 68%);
+  opacity: 0;
+  transition: opacity .35s ease;
+  pointer-events: none;
+}
+.spotlight:hover::after { opacity: 1; }
+
+/* ── Tipografia display (títulos grandes) ── */
+.display-xl {
+  font-size: clamp(2.1rem, 5.2vw, 3.6rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  color: var(--fg-0);
+}
+.display-lg {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  line-height: 1.12;
+  letter-spacing: -0.028em;
+  font-weight: 600;
+  color: var(--fg-0);
+}
+.eyebrow {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--neon);
+}
+
+/* ── Pílula / chip de status ── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .28rem .68rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 500;
+  border: 1px solid var(--hairline);
+  background: rgba(255,255,255,0.03);
+  color: var(--fg-1);
+  backdrop-filter: blur(8px);
+}
+.chip-neon {
+  border-color: rgba(34,211,238,0.35);
+  background: rgba(34,211,238,0.10);
+  color: #7DE3F4;
+  box-shadow: var(--shadow-glow-sm);
+}
+
+/* ── Pontinho "ao vivo" pulsante ── */
+.live-dot {
+  position: relative;
+  width: .5rem; height: .5rem;
+  border-radius: 999px;
+  background: var(--ok);
+  flex: none;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid var(--ok);
+  animation: live-ping 1.8s var(--ease-out-expo) infinite;
+}
+@keyframes live-ping {
+  0%   { transform: scale(.7); opacity: .9; }
+  70%  { transform: scale(2.1); opacity: 0; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+/* ── Botão v2 com brilho que varre no hover ── */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -140%;
+  width: 60%; height: 100%;
+  background: linear-gradient(100deg,
+    transparent, rgba(255,255,255,0.42), transparent);
+  transform: skewX(-18deg);
+  transition: left .7s var(--ease-out-expo);
+  pointer-events: none;
+}
+.btn-shine:hover::after { left: 150%; }
+
+/* ── Barra de progresso com trilha e brilho ── */
+.bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  overflow: hidden;
+  box-shadow: var(--shadow-inset-top);
+}
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--grad-neon);
+  box-shadow: 0 0 14px rgba(34,211,238,0.6);
+  transition: width .6s var(--ease-out-expo);
+}
+
+/* ── Skeleton de carregamento ── */
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--bg-3) 0%, var(--bg-4) 50%, var(--bg-3) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+@keyframes skeleton-wave {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Divisor com fade nas pontas ── */
+.divider-fade {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, var(--hairline-strong), transparent);
+}
+
+/* ── Hover-lift genérico ── */
+.lift {
+  transition: transform .3s var(--ease-out-expo),
+              box-shadow .3s var(--ease-out-expo);
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* ── Acessibilidade: respeita quem pediu menos movimento ── */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-bg::before,
+  .animate-pulse-neon,
+  .animate-float,
+  .shimmer,
+  .skeleton,
+  .live-dot::after {
+    animation: none !important;
+  }
+  .card-v2, .lift, .btn-neon, .btn-shine::after {
+    transition: none !important;
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "hero": {
+    "title": "MusicClipStudio",
+    "subtitle": "Transforme músicas em videoclipes incríveis com inteligência artificial",
+    "description": "Uma ferramenta independente e poderosa para criar videoclipes musicais. O primeiro passo traz sua música própria para o processo. Apoie o desenvolvimento deste projeto inovador.",
+    "cta": "Apoiar o Projeto"
+  },
+  "features": {
+    "title": "Funcionalidades",
+    "subtitle": "O que torna o MusicClipStudio especial",
+    "feature1": {
+      "title": "Geração Automática por IA",
+      "description": "Transforme músicas em visuais automáticos usando inteligência artificial avançada"
+    },
+    "feature2": {
+      "title": "Mídia Gratuita",
+      "description": "Banco de dados integrado com fotos e vídeos gratuitos de Pexels, Pixabay e Unsplash"
+    },
+    "feature3": {
+      "title": "Trilhas Originais por IA",
+      "description": "Trilhas sonoras geradas por IA com letras e melodias originais, sem narração"
+    },
+    "feature4": {
+      "title": "Interface Intuitiva",
+      "description": "GUI completa com 5 etapas simples: Música → Áudio → Imagens → Mídia → Gerar"
+    },
+    "feature5": {
+      "title": "Projeto para o Futuro",
+      "description": "Motor de áudio e imagem que será fornecido gratuitamente para a comunidade. Planejamento futuro: lipsync e tudo em um lugar só."
+    }
+  },
+  "support": {
+    "title": "Apoie o Projeto",
+    "subtitle": "Ajude a transformar esta ideia em realidade",
+    "description": "MusicClipStudio está em desenvolvimento ativo. Seu apoio financeiro será usado para melhorar o hardware e acelerar o desenvolvimento do motor de áudio e imagem, que será fornecido gratuitamente para a comunidade.",
+    "donation": {
+      "title": "Faça sua Doação",
+      "subtitle": "Qualquer valor faz a diferença - de R$ 1 a R$ 1000+",
+      "description": "Sua contribuição ajudará a:",
+      "benefits": [
+        "Melhorar hardware para processamento",
+        "Desenvolver motor de áudio gratuito",
+        "Criar motor de imagem gratuito",
+        "Acelerar desenvolvimento do projeto",
+        "Manter o projeto acessível a todos"
+      ],
+      "pix": {
+        "title": "PIX - Doe Agora",
+        "description": "Escaneie o QR Code ou use a chave PIX abaixo",
+        "instructions": "Abra o app do seu banco, escolha PIX, e escaneie o QR Code ou copie a chave:"
+      },
+      "methods": {
+        "title": "Outras Formas de Apoio",
+        "email": {
+          "title": "Email para Contato",
+          "description": "Para dúvidas, sugestões ou outras formas de apoio:",
+          "address": "projetostudio51@gmail.com"
+        }
+      }
+    },
+    "cta": "Fazer Doação"
+  },
+  "contact": {
+    "title": "Entre em Contato",
+    "description": "Dúvidas ou sugestões? Entre em contato!",
+    "email": "projetostudio51@gmail.com"
+  },
+  "footer": {
+    "copyright": "© 2026 MusicClipStudio - Studio 51. Todos os direitos reservados.",
+    "developedBy": "Desenvolvido com ❤️ para criadores de conteúdo",
+    "studio51": "Parte do ecossistema BlueBookStudio"
+  },
+  "language": {
+    "switch": "English"
+  }
+}
