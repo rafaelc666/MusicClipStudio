@@ -516,9 +516,57 @@ def testar_provedor(payload: ChavePayload, request: Request) -> dict[str, Any]:
         cfg = dataclasses.replace(cfg, stock_urls=json.dumps(urls_map))
     db = StockDatabase(cfg)
     try:
-        return db.testar_conexao(engine)
+        bruto = db.testar_conexao(engine)
     except Exception as e:
-        return {"ok": False, "mensagem": f"Erro no teste: {e}"}
+        return {"ok": False, "sucesso": False, "mensagem": f"Erro no teste: {e}"}
+    # ⚠️ CORRIGIDO (23/09/2026): o engine devolve {"sucesso": ...} mas a UI lê
+    # `ok`/`mensagem` — todo teste aparecia "Falhou" mesmo funcionando.
+    ok = bool(bruto.get("sucesso") or bruto.get("ok"))
+    msg = bruto.get("mensagem") or (
+        f"Conectado — {bruto.get('resultados', 0)} resultado(s)" if ok else "Falhou"
+    )
+    return {**bruto, "ok": ok, "mensagem": msg}
+
+
+@app.post("/api/provedores/importar-globais", tags=["provedores"])
+def importar_chaves_globais(request: Request) -> dict[str, Any]:
+    """Copia as chaves do .env deste computador para a conta logada.
+
+    ⚠️ NOVO (23/09/2026) — pedido do Rafael: usuário novo não devia ter que
+    colar 7 chaves na própria máquina. 1 clique importa; chaves que o usuário
+    já salvou NÃO são sobrescritas. (App é local — o .env já está na máquina.)
+    """
+    usuario = _usuario_atual(request)
+    if not usuario:
+        raise HTTPException(401, detail="Faça login para configurar os provedores")
+    if not _BACKBONE_IMPORTED:
+        raise HTTPException(500, detail=f"Backbone não carregado: {_BACKBONE_ERROR}")
+    cfg, _, _, _ = _get_backbone()
+    mapa = {
+        "pexels": "stock_pexels_api_key",
+        "pixabay": "stock_pixabay_api_key",
+        "unsplash": "stock_unsplash_api_key",
+        "nasa": "stock_nasa_api_key",
+        "coverr": "stock_coverr_api_key",
+        "giphy": "stock_giphy_api_key",
+        "openverse": "stock_openverse_api_key",
+    }
+    ja = {
+        p["id"] for p in _AUTH.resumo_provedores(usuario["id"])["fixos"] if p["configurada"]
+    }
+    importadas: list[str] = []
+    for pid, campo in mapa.items():
+        if pid in ja:
+            continue
+        valor = (str(getattr(cfg, campo, "") or "")).strip()
+        if valor:
+            _AUTH.definir_chave(usuario["id"], pid, chave=valor, url="")
+            importadas.append(pid)
+    return {
+        "ok": True,
+        "importadas": importadas,
+        "resumo": _AUTH.resumo_provedores(usuario["id"]),
+    }
 
 
 @app.get("/api/projetos", tags=["projetos"])
@@ -604,7 +652,7 @@ def analisar_letra(payload: ClipProjectPayload) -> dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.post("/api/upload/audio", tags=["upload"])
-async def upload_audio(file: UploadFile = File(...)) -> dict[str, Any]:
+async def upload_audio(file: UploadFile = File(...), request: Request = None) -> dict[str, Any]:
     """
     Recebe a MÚSICA PRONTA do usuário (base da arquitetura Opção A).
 
@@ -615,8 +663,15 @@ async def upload_audio(file: UploadFile = File(...)) -> dict[str, Any]:
     a pasta `output/`. Antes a resposta só trazia `uploads/<arq>`, então
     montar `API_BASE + "/static/" + path` dava 404 — o player do wizard
     quebrava sempre. Agora `url` já vem no formato certo.
+
+    ⚠️ 23/09/2026 — uploads POR USUÁRIO: o nome do arquivo ganha o prefixo
+    `u<user_id>_`. Assim a lista de "uploads recentes" só mostra os arquivos
+    do próprio usuário (antes: qualquer navegador novo via os últimos
+    uploads de TODO MUNDO — inclusive de teste).
     """
-    filename = f"{uuid.uuid4().hex}_{file.filename or 'audio.mp3'}"
+    usuario = _usuario_atual(request) if request else None
+    dono = f"u{usuario['id']}_" if usuario else "anon_"
+    filename = f"{dono}{uuid.uuid4().hex}_{file.filename or 'audio.mp3'}"
     destino = UPLOAD_DIR / filename
     contents = await file.read()
     with open(destino, "wb") as f:
@@ -631,7 +686,7 @@ async def upload_audio(file: UploadFile = File(...)) -> dict[str, Any]:
 
 
 @app.get("/api/upload/audio/recente", tags=["upload"])
-def listar_uploads_recentes(limite: int = 8) -> dict[str, Any]:
+def listar_uploads_recentes(request: Request, limite: int = 8) -> dict[str, Any]:
     """
     Lista os uploads de áudio mais recentes em `output/uploads/`.
 
@@ -644,10 +699,19 @@ def listar_uploads_recentes(limite: int = 8) -> dict[str, Any]:
     arquivos < 1 KB (currais de teste zerados) e ordena do mais novo pro
     mais antigo.
     """
+    # ⚠️ 23/09/2026 — SÓ os uploads DO USUÁRIO logado (prefixo `u<id>_`).
+    # Arquivos antigos (sem prefixo de usuário) não aparecem para ninguém —
+    # eram todos de teste. Primeiro acesso = lista vazia, como deve ser.
+    usuario = _usuario_atual(request)
+    if not usuario:
+        return {"ok": True, "total": 0, "itens": []}
+    prefixo = f"u{usuario['id']}_"
     if not UPLOAD_DIR.exists():
         return {"ok": True, "total": 0, "itens": []}
     itens = []
     for caminho in UPLOAD_DIR.iterdir():
+        if not caminho.name.startswith(prefixo):
+            continue
         if not caminho.is_file() or caminho.suffix.lower() not in (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"):
             continue
         try:
@@ -659,7 +723,7 @@ def listar_uploads_recentes(limite: int = 8) -> dict[str, Any]:
         itens.append({
             "path": f"uploads/{caminho.name}",
             "url": f"/static/output/uploads/{caminho.name}",
-            "nome": caminho.name.split("_", 1)[-1] if "_" in caminho.name else caminho.name,
+            "nome": caminho.name[len(prefixo):].split("_", 1)[-1] if "_" in caminho.name[len(prefixo):] else caminho.name[len(prefixo):],
             "size_bytes": st.st_size,
             "mtime": st.st_mtime,
         })
