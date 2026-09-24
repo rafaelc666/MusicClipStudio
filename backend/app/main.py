@@ -1191,14 +1191,56 @@ def _run_generation_sync(job_id: str, payload: GeneratePayload):
             caminho = u.split("?", 1)[0].split("#", 1)[0].lower()
             return caminho.endswith(_EXT_MIDIA)
 
-        ruins = [(i, u) for i, u in enumerate(imagens) if not _eh_arquivo_midia(u)]
-        if ruins:
-            i, u = ruins[0]
-            raise RuntimeError(
-                f"Mídia da cena {i + 1} não é um arquivo direto ({u[:80]}...). "
-                "Isso quebrava o render silenciosamente (vídeo azul). "
-                "Refaça a busca na etapa 05 com o backend atualizado."
-            )
+        # ⚠️ CORRIGIDO (24/09/2026): URLs de mídia SEM extensão (ex. Unsplash
+        # images.unsplash.com/photo-...?crop=...) são arquivos diretos de
+        # verdade — eram rejeitadas pelo filtro de extensão e o render morria
+        # com "não é um arquivo direto". Agora: baixa para cache local e
+        # valida o Content-Type. Só erro de verdade se NÃO for mídia
+        # (página HTML do provedor — o caso do "vídeo azul").
+        def _baixar_midia_para_cache(u: str) -> str:
+            import hashlib as _hl
+            import urllib.request as _ur
+            destino_dir = OUTPUT_DIR / "media_cache"
+            destino_dir.mkdir(parents=True, exist_ok=True)
+            chave = _hl.sha256(u.encode()).hexdigest()[:20]
+            pedido = _ur.Request(u, headers={"User-Agent": "MusicClipStudio/1.0"})
+            with _ur.urlopen(pedido, timeout=30) as resp:  # noqa: S310 — URL vem da busca do próprio usuário
+                tipo = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                dados = resp.read()
+            if tipo == "image/jpeg":
+                ext = ".jpg"
+            elif tipo in ("image/png", "image/webp", "image/gif", "image/bmp", "video/mp4", "video/webm", "video/quicktime"):
+                ext = {"image/png": ".png", "image/webp": ".webp", "image/gif": ".gif", "image/bmp": ".bmp", "video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov"}[tipo]
+            else:
+                raise RuntimeError(
+                    f"URL não é mídia direta (Content-Type: {tipo or 'desconhecido'}). "
+                    "Refire a busca na etapa 05 — página HTML de provedor não renderiza (vídeo azul)."
+                )
+            if len(dados) < 1024:
+                raise RuntimeError("Mídia baixada está vazia/corrompida — refaça a busca na etapa 05.")
+            destino = destino_dir / f"{chave}{ext}"
+            destino.write_bytes(dados)
+            return str(destino)
+
+        finais: list[str] = []
+        for i, u in enumerate(imagens):
+            if not u:
+                continue
+            if _eh_arquivo_midia(u):
+                finais.append(u)
+                continue
+            if u.startswith(("http://", "https://")):
+                try:
+                    finais.append(_baixar_midia_para_cache(u))
+                    _evt("progress", {"pct": 12, "etapa": "imagens", "msg": f"cena {i + 1}: mídia baixada para cache"})
+                except Exception as e:  # URL boa que falhou na rede também morre aqui
+                    raise RuntimeError(f"Mídia da cena {i + 1} não pôde ser preparada: {e}") from e
+            else:
+                raise RuntimeError(
+                    f"Mídia da cena {i + 1} não é um arquivo direto ({u[:80]}...). "
+                    "Refire a busca na etapa 05."
+                )
+        imagens = finais
 
         # ⚠️ NOVO (22/09/2026): legendas com os TEMPOS REAIS da transcrição
         # (Whisper, etapa 03) quando o frontend as envia. Sem elas, cai no
