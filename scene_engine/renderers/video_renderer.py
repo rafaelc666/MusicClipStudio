@@ -321,6 +321,7 @@ class VideoRenderer:
                     fx: ((b.querySelector('.parallax-bg') || {}).className || '')
                           .split(' ').find(c => c.indexOf('fx-') === 0) || '',
                     temVideo: !!b.querySelector('video'),
+                    videoSrc: ((b.querySelector('video') || {}).src) || '',
                 }))"""
             )
 
@@ -332,12 +333,16 @@ class VideoRenderer:
             if not beats:
                 browser.close()
                 raise RuntimeError("nenhum beat para renderizar")
-            if any(b["temVideo"] for b in beats):
-                browser.close()
-                raise RuntimeError("beat com vídeo — caminho rápido não se aplica")
+            # ⚠️ 24/09/2026 — beat com VÍDEO agora é nativo do ffmpeg também
+            # (trim do trecho + scale/crop pra preencher). Antes: abortava o
+            # caminho rápido e caía no por-frame (~1 s/frame → 40 min = horas).
+
+            # screenshot só para beats de IMAGEM (vídeo não precisa)
 
             # 1 screenshot por beat, sem animação: o movimento vem do zoompan
             for b in beats:
+                if b["temVideo"]:
+                    continue
                 page.evaluate(
                     """(idx) => {
                         document.querySelectorAll('.beat').forEach((el, i) => {
@@ -356,14 +361,37 @@ class VideoRenderer:
 
         # um segmento por beat via zoompan
         segmentos = []
+        n_videos = 0
         for b in beats:
             dur = max(0.0, float(b["end"]) - float(b["start"]))
             if dur <= 0:
                 continue
             n = max(1, int(round(dur * fps)))
+            seg = pasta / f"seg_{b['i']:03d}.mp4"
+            if b["temVideo"] and b.get("videoSrc"):
+                # VÍDEO: trim nativo do trecho, cover scale (preenche e
+                # corta o excesso) — o movimento real já vem no arquivo.
+                src = str(b["videoSrc"])
+                if src.startswith("file://"):
+                    src = src[len("file://"):]
+                cmd = [
+                    "ffmpeg", "-y", "-stream_loop", "-1", "-i", src,
+                    "-t", f"{dur:.3f}",
+                    "-vf",
+                    (f"scale={self.width}:{self.height}:force_original_aspect_ratio=increase,"
+                     f"crop={self.width}:{self.height},fps={fps},format=yuv420p"),
+                    "-an", "-c:v", "libx264", "-crf", str(crf),
+                    "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                    str(seg),
+                ]
+                r = subprocess.run(cmd, capture_output=True, text=True)
+                if r.returncode != 0:
+                    raise RuntimeError(f"segmento de vídeo falhou: {r.stderr[:300]}")
+                segmentos.append(seg)
+                n_videos += 1
+                continue
             z, cx, cy = self._expr_zoompan(b["fx"], n)
             img = pasta / f"beat_{b['i']:03d}.jpg"
-            seg = pasta / f"seg_{b['i']:03d}.mp4"
             cmd = [
                 "ffmpeg", "-y", "-loop", "1", "-i", str(img),
                 "-vf",
@@ -403,8 +431,8 @@ class VideoRenderer:
             if r.returncode != 0:
                 raise RuntimeError(f"concat falhou: {r.stderr[:300]}")
 
-        print(f"[VideoRenderer] Caminho rápido: {len(beats)} beat(s), "
-              f"{len(segmentos)} segmento(s)")
+        print(f"[VideoRenderer] Caminho rápido: {len(beats)} beat(s) "
+              f"({n_videos} vídeo nativo(s)), {len(segmentos)} segmento(s)")
         return output_path
 
     @staticmethod
