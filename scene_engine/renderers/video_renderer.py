@@ -73,6 +73,15 @@ class VideoRenderer:
                 page.goto(html_path.as_uri())
                 page.wait_for_timeout(500)
 
+                # ⚠️ 24/09/2026 — os templates (html_renderer, kinetic_title,
+                # vox_editorial…) embutem botões de preview ("Play/Pause",
+                # "Restart") num <div class="controls">. No preview web eles
+                # ajudam; no render viravam pixels QUEIMADOS no vídeo final
+                # (bug reportado pelo Rafa). Esconde tudo antes de fotografar.
+                page.add_style_tag(content="""
+                    .controls, button { display: none !important; }
+                """)
+
                 # ⚠️ CORRIGIDO (21/09/2026) — esperava só 500 ms e já saía
                 # fotografando. Para fotos do Pexels (cache miss, 3–10 MB)
                 # e vídeos (streaming) isso é cedo demais: a captura saía
@@ -307,6 +316,10 @@ class VideoRenderer:
             )
             page.goto(Path(html_path).as_uri())
             page.wait_for_timeout(500)
+            # esconde controles de preview (ver comentário em render_html_to_images)
+            page.add_style_tag(content="""
+                .controls, button { display: none !important; }
+            """)
             try:
                 page.wait_for_load_state("networkidle", timeout=20000)
             except Exception:

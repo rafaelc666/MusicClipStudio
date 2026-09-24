@@ -2460,6 +2460,23 @@ function Step6Gerar() {
     registrarFalha(job.error || "O backend não conseguiu finalizar a renderização.");
   };
 
+  // Abre o gerenciador de arquivos do PC na pasta do MP4 final (o app roda
+  // local, então o destino real do arquivo é a própria máquina).
+  const abrirPastaResultado = async () => {
+    if (!jobId) return;
+    try {
+      const r = await fetch(`${API_BASE}/api/jobs/${jobId}/abrir-pasta`, { method: "POST" });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        toast.error("Não foi possível abrir a pasta", { description: (e as any)?.detail });
+        return;
+      }
+      toast.success("Pasta aberta", { description: "O vídeo ficou no seu PC." });
+    } catch (e: any) {
+      toast.error("Erro ao abrir a pasta", { description: String(e?.message || e) });
+    }
+  };
+
   const monitorarJob = (id: string) => {
     const consultar = async () => {
       try {
@@ -2672,8 +2689,14 @@ function Step6Gerar() {
                       Formato {state.formato} · 30fps · {state.musica.duracao}s
                     </div>
                     <div className="flex items-center gap-2 pt-2">
-                      <Button variant="neon" size="md"><Download className="h-4 w-4" /> Download .MP4</Button>
-                      <Button variant="outline" size="md"><Play className="h-4 w-4" /> Assistir</Button>
+                      <Button asChild variant="neon" size="md">
+                        <a href={`${API_BASE}${resultado?.download_url ?? ""}`} download>
+                          <Download className="h-4 w-4" /> Baixar .MP4
+                        </a>
+                      </Button>
+                      <Button variant="outline" size="md" onClick={abrirPastaResultado}>
+                        <FolderOpen className="h-4 w-4" /> Abrir pasta
+                      </Button>
                     </div>
                   </motion.div>
                 )}
