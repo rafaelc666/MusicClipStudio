@@ -130,12 +130,12 @@ REM atalhos (Area de Trabalho + Menu Iniciar) via PowerShell
 set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 set "WORK=%DESTINO%\INICIAR-MUSICCLIP.bat"
 "!PS!" -NoProfile -Command ^
- "$w = New-Object -ComObject WScript.Shell; $d=[Environment]::GetFolderPath('Desktop'); $s=$w.CreateShortcut(\"$d\MusicClipStudio.lnk\"); $s.TargetPath='%WORK%'; $s.WorkingDirectory='%DESTINO%'; $s.IconLocation='%SystemRoot%\System32\ddores.dll,201'; $s.Save()" || goto :atalho_erro
+ "$w = New-Object -ComObject WScript.Shell; $d=[Environment]::GetFolderPath('Desktop'); $s=$w.CreateShortcut(\"$d\MusicClipStudio.lnk\"); $s.TargetPath='%WORK%'; $s.WorkingDirectory='%DESTINO%'; $s.IconLocation='%DESTINO%\assets\icon.ico'; $s.Save()" || goto :atalho_erro
 set "MENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs"
 "!PS!" -NoProfile -Command ^
- "$w = New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut('%MENU%\MusicClipStudio.lnk'); $s.TargetPath='%WORK%'; $s.WorkingDirectory='%DESTINO%'; $s.Save()" >nul 2>nul
+ "$w = New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut('%MENU%\MusicClipStudio.lnk'); $s.TargetPath='%WORK%'; $s.WorkingDirectory='%DESTINO%'; $s.IconLocation='%DESTINO%\assets\icon.ico'; $s.Save()" >nul 2>nul
 "!PS!" -NoProfile -Command ^
- "$w = New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut('%MENU%\Desinstalar MusicClipStudio.lnk'); $s.TargetPath='%DESTINO%\DESINSTALAR.bat'; $s.WorkingDirectory='%DESTINO%'; $s.Save()" >nul 2>nul
+ "$w = New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut('%MENU%\Desinstalar MusicClipStudio.lnk'); $s.TargetPath='%DESTINO%\DESINSTALAR.bat'; $s.WorkingDirectory='%DESTINO%'; $s.IconLocation='%DESTINO%\assets\icon.ico'; $s.Save()" >nul 2>nul
 goto :atalho_ok
 :atalho_erro
 echo   [!] atalhos falharam (o app funciona mesmo assim — INICIAR-MUSICCLIP.bat)
