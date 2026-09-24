@@ -922,9 +922,14 @@ def _config_do_usuario(request: Request) -> Any:
     if not usuario:
         return None
     chaves = _AUTH.chaves_para_busca(usuario["id"])
-    if not chaves:
-        return None
+    # ⚠️ CORRIGIDO (23/09/2026): antes, QUALQUER blob no usuário (ex.: 1
+    # banco próprio) ativa o override e DESCARTAVA as chaves do .env —
+    # bancos sem chave no usuário morriam mesmo tendo chave global (era a
+    # causa de a grade virar 100% Pexels). Agora o usuário COMPLEMENTA:
+    # a chave dele tem prioridade; onde ele não tem, vale a do .env.
     cfg = load_config()
+    if not chaves:
+        return cfg
     # ⚠️ NOVO (23/09/2026): os toggles liga/desliga do diálogo controlam de
     # verdade a busca — sem isso, banco desligado continuava sendo consultado.
     habilitados = _AUTH.habilitados_do_usuario(usuario["id"])
