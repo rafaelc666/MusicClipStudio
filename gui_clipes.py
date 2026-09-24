@@ -1019,11 +1019,18 @@ class GuiClipes(ctk.CTk):
             text_color=Tema.TEXTO_SOBRE_PRIMARIA, font=Tema.fonte(Tema.FONTE_BASE, negrito=True),
         ).pack(side="left")
 
-        # Provider
-        self.var_provider = ctk.StringVar(value=self._config.stock_provider)
+        # Provider — ⚠️ NOVO (24/09/2026): "todos" consulta os 7 bancos e
+        # intercala (pesquisar_multi); default da tela passou a ser "todos"
+        # porque buscar num banco só era a causa do "sempre vem coisa do
+        # Pexels". Config antigo com provider específico continua valendo.
+        _prov_inicial = self._config.stock_provider
+        if _prov_inicial in ("", "pexels"):
+            _prov_inicial = "todos"
+        self.var_provider = ctk.StringVar(value=_prov_inicial)
         ctk.CTkOptionMenu(
             search_frame,
-            values=["pexels", "pixabay", "unsplash", "nasa", "coverr", "giphy", "openverse"],
+            values=["todos", "pexels", "pixabay", "unsplash", "nasa",
+                    "coverr", "giphy", "openverse"],
             variable=self.var_provider,
             fg_color=Tema.CARTAO, button_color=Tema.PRIMARY,
             text_color=Tema.TEXTO, width=120,
@@ -2252,9 +2259,16 @@ class GuiClipes(ctk.CTk):
         # Busca em thread separada
         def buscar():
             try:
-                resultado = self._db.pesquisar(
-                    query, provider=provider, max_results=12
-                )
+                if provider == "todos":
+                    # Todos os bancos habilitados + termos EN extras da IA
+                    # (se houver chave no diálogo de APIs) + selo de status.
+                    resultado = self._db.pesquisar_multi(
+                        query, max_results=24, usar_ia=True
+                    )
+                else:
+                    resultado = self._db.pesquisar(
+                        query, provider=provider, max_results=12
+                    )
                 # Atualiza GUI na thread principal
                 self.after(0, lambda: self._exibir_resultados(resultado))
             except Exception as e:
@@ -2664,7 +2678,19 @@ class GuiClipes(ctk.CTk):
             self._resultados_frame,
             text=f"{len(resultado.results)} resultado(s) encontrado(s)",
             text_color=Tema.TEXTO_CLARO, font=Tema.fonte(Tema.FONTE_BASE, negrito=True),
-        ).pack(anchor="w", pady=(8, 12))
+        ).pack(anchor="w", pady=(8, 2))
+
+        # ⚠️ NOVO (24/09/2026): selo "bancos: pexels ✓12 · giphy ✗403" —
+        # falha de banco agora É VISÍVEL (antes era print escondido no console).
+        status = getattr(resultado, "status", None) or {}
+        if status:
+            resumo = " · ".join(f"{p} {s}" for p, s in status.items())
+            ctk.CTkLabel(
+                self._resultados_frame,
+                text=f"bancos: {resumo}",
+                text_color=Tema.TEXTO_DIM, font=Tema.fonte(Tema.FONTE_BASE),
+            ).pack(anchor="w", pady=(0, 10))
+            self._log(f"[SEARCH] status dos bancos: {resumo}")
         
         # Grid de resultados
         grid_frame = ctk.CTkFrame(self._resultados_frame, fg_color="transparent")

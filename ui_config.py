@@ -78,6 +78,11 @@ class APIConfigUI:
         notebook.add(openverse_frame, text="Openverse")
         self._create_openverse_tab(openverse_frame)
 
+        # Aba IA de busca (⚠️ NOVO 24/09/2026)
+        ia_frame = ttk.Frame(notebook, padding="10")
+        notebook.add(ia_frame, text="IA Busca")
+        self._create_ia_tab(ia_frame)
+
         # Botões
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(10, 0))
@@ -233,6 +238,42 @@ class APIConfigUI:
         self.openverse_status = ttk.Label(parent, text="", foreground="gray")
         self.openverse_status.pack(anchor=tk.W, pady=(5, 0))
 
+    def _create_ia_tab(self, parent):
+        """Aba da chave GENÉRICA de IA para a busca (⚠️ NOVO 24/09/2026).
+
+        Uma única entrada aceita Google (AIza…), Groq (gsk_…), OpenRouter
+        (sk-or-…) ou qualquer OpenAI-compatible (sk-…) — o provedor é
+        detectado pelo prefixo. A IA só traduz a intenção da busca
+        (letra/consulta PT → termos visuais EN); sem chave, a busca
+        continua funcionando pelo caminho determinístico.
+        """
+        ttk.Label(parent, text="Chave de IA para pesquisa (opcional):").pack(anchor=tk.W)
+        self.ia_key = ttk.Entry(parent, width=50)
+        self.ia_key.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(parent, text="Modelo (vazio = default do provedor):").pack(anchor=tk.W)
+        self.ia_model = ttk.Entry(parent, width=50)
+        self.ia_model.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(parent, text="Base URL (só p/ OpenAI-compatible fora da lista):").pack(anchor=tk.W)
+        self.ia_base = ttk.Entry(parent, width=50)
+        self.ia_base.pack(fill=tk.X, pady=(0, 10))
+
+        self.ia_enabled = tk.BooleanVar()
+        ttk.Checkbutton(parent, text="Habilitado", variable=self.ia_enabled).pack(anchor=tk.W)
+
+        ttk.Label(
+            parent,
+            text="Aceita: AIza… (Gemini) · gsk_… (Groq) · sk-or-… (OpenRouter) · sk-… (genérico).\n"
+                 "A IA não busca: gera os termos em inglês que os bancos entendem melhor.",
+            foreground="gray",
+        ).pack(anchor=tk.W)
+
+        ttk.Button(parent, text="Testar IA", command=self._test_ia).pack(pady=(10, 0))
+
+        self.ia_status = ttk.Label(parent, text="", foreground="gray")
+        self.ia_status.pack(anchor=tk.W, pady=(5, 0))
+
     def _load_config(self):
         """Carrega a configuração atual."""
         self.pexels_key.insert(0, self.config.stock_pexels_api_key)
@@ -258,6 +299,11 @@ class APIConfigUI:
         self.openverse_key.insert(0, self.config.stock_openverse_api_key)
         self.openverse_enabled.set(self.config.stock_openverse_enabled)
 
+        self.ia_key.insert(0, self.config.stock_ia_api_key)
+        self.ia_model.insert(0, self.config.stock_ia_model)
+        self.ia_base.insert(0, self.config.stock_ia_base_url)
+        self.ia_enabled.set(self.config.stock_ia_enabled)
+
     def _save(self):
         """Salva a configuração."""
         self.config.stock_pexels_api_key = self.pexels_key.get().strip()
@@ -282,6 +328,11 @@ class APIConfigUI:
 
         self.config.stock_openverse_api_key = self.openverse_key.get().strip()
         self.config.stock_openverse_enabled = self.openverse_enabled.get()
+
+        self.config.stock_ia_api_key = self.ia_key.get().strip()
+        self.config.stock_ia_model = self.ia_model.get().strip()
+        self.config.stock_ia_base_url = self.ia_base.get().strip()
+        self.config.stock_ia_enabled = self.ia_enabled.get()
 
         save_config(self.config)
         messagebox.showinfo("Sucesso", "Configuração salva com sucesso!")
@@ -331,6 +382,39 @@ class APIConfigUI:
             label.config(text=f"✓ Conectado ({result['resultados']} resultados)", foreground="green")
         else:
             label.config(text=f"✗ Erro: {result['erro']}", foreground="red")
+
+    def _test_ia(self):
+        """Testa a chave genérica de IA (detecção + 1 chamada real)."""
+        from MusicClipStudio import ia_busca
+
+        chave = self.ia_key.get().strip()
+        provedor = ia_busca.detectar_provedor(chave)
+        if not chave:
+            self.ia_status.config(text="sem chave informada", foreground="gray")
+            return
+        if not provedor:
+            self.ia_status.config(
+                text="✗ prefixo não reconhecido (AIza…/gsk_…/sk-or-…/sk-…)",
+                foreground="red")
+            return
+
+        self.ia_status.config(
+            text=f"Testando {provedor}…", foreground="gray")
+        self.window.update()
+        modelo = self.ia_model.get().strip()
+        base = self.ia_base.get().strip()
+
+        def test_in_thread():
+            r = ia_busca.testar(chave, modelo=modelo, base_url=base)
+            if r["ok"]:
+                txt = f"✓ {r['provedor']} · {r['modelo']} · {r['amostra']}"
+                cor = "green"
+            else:
+                txt = f"✗ {r.get('provedor', '')}: {r['erro']}"
+                cor = "red"
+            self.window.after(0, lambda: self.ia_status.config(text=txt, foreground=cor))
+
+        threading.Thread(target=test_in_thread, daemon=True).start()
 
     def _test_all(self):
         """Testa todos os provedores habilitados."""

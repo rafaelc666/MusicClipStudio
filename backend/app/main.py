@@ -19,10 +19,12 @@ import json
 import uuid
 import threading
 import time
+import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Request, Response
+from fastapi.responses import FileResponse
 
 # Garante que importamos o MusicClipStudio da pasta raiz.
 #
@@ -1037,6 +1039,9 @@ def buscar_midia(payload: SearchMediaPayload, request: Request) -> dict[str, Any
                 max_results=payload.max_results,
                 apenas_fotos=payload.apenas_fotos,
                 apenas_videos=payload.apenas_videos,
+                # ⚠️ 24/09/2026: termos EN da IA genérica quando o usuário
+                # configurou a chave (sem chave, muda nada na busca).
+                usar_ia=True,
             )
         resultados = getattr(busca, "results", None)
         if resultados is None:
@@ -1313,6 +1318,49 @@ def get_job(job_id: str) -> dict[str, Any]:
     if job_id not in _jobs:
         raise HTTPException(404, detail="Job não encontrado")
     return _jobs[job_id]
+
+
+def _resultado_do_job(job_id: str) -> Path:
+    """Retorna o Path do MP4 final de um job concluído, ou 404."""
+    job = _jobs.get(job_id) or {}
+    out = (job.get("resultado") or {}).get("output_path")
+    if not out:
+        raise HTTPException(404, detail="Job sem resultado pronto")
+    arquivo = Path(out)
+    if not arquivo.is_file():
+        raise HTTPException(404, detail="Arquivo não encontrado no disco")
+    return arquivo
+
+
+@app.get("/api/jobs/{job_id}/download", tags=["jobs"])
+def baixar_resultado(job_id: str):
+    """Baixa o MP4 final com Content-Disposition: attachment (força o save,
+    mesmo com o proxy do Next entre 3100 e 8300)."""
+    arquivo = _resultado_do_job(job_id)
+    return FileResponse(str(arquivo), filename=arquivo.name, media_type="video/mp4")
+
+
+@app.post("/api/jobs/{job_id}/abrir-pasta", tags=["jobs"])
+def abrir_pasta_resultado(job_id: str) -> dict[str, Any]:
+    """Abre o gerenciador de arquivos do SO na pasta do MP4. O app roda no
+    mesmo PC do usuário, então 'abrir pasta' é o destino real do arquivo."""
+    arquivo = _resultado_do_job(job_id)
+    pasta = arquivo.parent.resolve()
+    # Segurança: só abre pastas dentro do OUTPUT_DIR do projeto.
+    try:
+        pasta.relative_to(OUTPUT_DIR.resolve())
+    except ValueError:
+        raise HTTPException(400, detail="Pasta fora do diretório de saída")
+    try:
+        if sys.platform.startswith("win"):
+            subprocess.Popen(["explorer", str(pasta)])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(pasta)])
+        else:
+            subprocess.Popen(["xdg-open", str(pasta)])
+    except Exception as e:
+        raise HTTPException(500, detail=f"Falha ao abrir a pasta: {e}")
+    return {"ok": True, "pasta": str(pasta)}
 
 
 @app.websocket("/ws/jobs/{job_id}")

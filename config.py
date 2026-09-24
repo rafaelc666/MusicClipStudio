@@ -130,6 +130,18 @@ class ClipConfig:
     # dataclasses.replace no request do usuário logado.
     stock_urls: str = ""
 
+    # ── IA para busca nos bancos (⚠️ NOVO 24/09/2026) ──────────
+    # Chave GENÉRICA: Google (AIza…), Groq (gsk_…), OpenRouter
+    # (sk-or-…) ou qualquer OpenAI-compatible (sk-…) — o provedor é
+    # detectado pelo prefixo (ver ia_busca.py). A IA não busca: só
+    # traduz a intenção (letra PT → termos visuais EN, que os bancos
+    # indexam melhor). Sem chave ou com erro → fluxo determinístico
+    # antigo; a busca nunca quebra por causa desta chave.
+    stock_ia_api_key: str = _env_chave("STOCK_IA_API_KEY")
+    stock_ia_model: str = ""        # vazio = default do provedor
+    stock_ia_base_url: str = ""     # só p/ OpenAI-compatible fora da lista
+    stock_ia_enabled: bool = True
+
     # ── Agente de direção de imagens ───────────────────────
     agent_enabled: bool = True
     agent_model: str = ""                     # Modelo LLM para agente
@@ -226,6 +238,10 @@ class ClipConfig:
             "stock_giphy_enabled": self.stock_giphy_enabled,
             "stock_openverse_api_key": self.stock_openverse_api_key,
             "stock_openverse_enabled": self.stock_openverse_enabled,
+            "stock_ia_api_key": self.stock_ia_api_key,
+            "stock_ia_model": self.stock_ia_model,
+            "stock_ia_base_url": self.stock_ia_base_url,
+            "stock_ia_enabled": self.stock_ia_enabled,
             "agent_enabled": self.agent_enabled,
             "agent_model": self.agent_model,
             "agent_style": self.agent_style,

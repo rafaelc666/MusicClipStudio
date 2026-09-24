@@ -46,6 +46,14 @@ class StockSearch:
     provider: str = ""
     results: list[StockMedia] = field(default_factory=list)
     total: int = 0
+    # ⚠️ NOVO (24/09/2026): status por banco ("pexels": "✓12",
+    # "giphy": "✗403"). A galeria mostra como selo — banco que falha
+    # não pode mais sumir em silêncio (era como a busca parecia "de 1
+    # banco só").
+    status: dict[str, str] = field(default_factory=dict)
+    # Erro cru do provedor (quando houver) — permite ao selo dizer
+    # "✗403" em vez de fingir que a busca deu "0 resultados".
+    erro: str = ""
 
 
 ALTURA_VIDEO_MINIMA = 720
@@ -195,6 +203,7 @@ class StockDatabase:
             )
 
         results = []
+        erro = ""
         try:
             if provider == "pexels":
                 results = self._buscar_pexels(query, max_results, apenas_fotos, apenas_videos)
@@ -213,6 +222,7 @@ class StockDatabase:
             else:
                 results = self._buscar_pexels(query, max_results, apenas_fotos, apenas_videos)
         except Exception as e:
+            erro = str(e)
             print(f"[StockDB] Erro ao buscar: {e}")
 
         # ESTE ORDENAMENTO E' OBRIGATORIO, NAO COSMETICO.
@@ -230,6 +240,7 @@ class StockDatabase:
         return StockSearch(
             query=query, provider=provider,
             results=results[:max_results], total=len(results),
+            erro=erro,
         )
 
     @staticmethod
@@ -260,6 +271,7 @@ class StockDatabase:
     ) -> StockSearch:
         """Busca em todos os provedores habilitados e combina resultados."""
         all_results = []
+        status: dict[str, str] = {}
 
         providers = []
         if self.config.stock_pexels_enabled:
@@ -280,13 +292,21 @@ class StockDatabase:
         for provider in providers:
             try:
                 search = self.pesquisar(query, provider=provider, max_results=max_results)
+                if search.results:
+                    status[provider] = f"\u2713{len(search.results)}"
+                elif search.erro:
+                    status[provider] = f"\u2717{search.erro[:40]}"
+                else:
+                    status[provider] = "vazio"
                 all_results.extend(search.results)
             except Exception as e:
+                status[provider] = f"\u2717{str(e)[:40]}"
                 print(f"[StockDB] Erro no {provider}: {e}")
 
         return StockSearch(
             query=query, provider="all",
             results=all_results[:max_results], total=len(all_results),
+            status=status,
         )
 
     def pesquisar_multi(
@@ -295,6 +315,7 @@ class StockDatabase:
         max_results: int = 20,
         apenas_fotos: bool = False,
         apenas_videos: bool = False,
+        usar_ia: bool = False,
     ) -> StockSearch:
         """⚠️ NOVO (23/09/2026): busca em TODOS os bancos habilitados do config.
 
@@ -302,23 +323,56 @@ class StockDatabase:
         (só fotos/só vídeos) e intercala os provedores (1 resultado de cada
         em rodada) para a galeria misturar bancos em vez de encher de um só.
         Cada banco usa a própria chave (config) e a própria URL (custom→oficial).
+
+        ⚠️ ATUALIZADO (24/09/2026):
+          * usar_ia=True: a IA (chave genérica do config, ver ia_busca.py)
+            acrescenta 1-2 termos EN à consulta — os bancos indexam em
+            inglês e "praia pôr do sol" rende quase nada lá. Sem chave,
+            segue buscando só o texto original.
+          * status por banco preenchido (✓N / vazio / ✗erro) para a
+            galeria exibir o selo — falha silenciosa não existe mais.
         """
         provedores = [p for p in self.API_BASE
                       if p in ("pexels", "pixabay", "unsplash", "nasa",
                                "coverr", "giphy", "openverse")
                       and self._is_enabled(p)]
+
+        termos = [query]
+        if usar_ia:
+            for t in self._termos_ia(query, num_terms=2):
+                if t and t.lower() != query.lower():
+                    termos.append(t)
+
         # Pixabay tem endpoint de vídeo separado; é consultado pelo mesmo banco.
         por_provedor: dict[str, list] = {}
+        status: dict[str, str] = {}
         for provider in provedores:
-            try:
-                search = self.pesquisar(
-                    query, provider=provider, max_results=max_results,
-                    apenas_fotos=apenas_fotos, apenas_videos=apenas_videos,
-                )
-                if search.results:
-                    por_provedor[provider] = list(search.results)
-            except Exception as e:
-                print(f"[StockDB] Erro no {provider}: {e}")
+            acumulado: list = []
+            vistos: set[str] = set()
+            erro_provider = ""
+            for termo in termos:
+                try:
+                    search = self.pesquisar(
+                        termo, provider=provider, max_results=max_results,
+                        apenas_fotos=apenas_fotos, apenas_videos=apenas_videos,
+                    )
+                    if search.erro:
+                        erro_provider = erro_provider or search.erro
+                    for item in search.results:
+                        base = (item.download_url or item.url).split("?")[0]
+                        if base and base not in vistos:
+                            vistos.add(base)
+                            acumulado.append(item)
+                except Exception as e:
+                    erro_provider = erro_provider or str(e)
+            if acumulado:
+                por_provedor[provider] = acumulado
+            if acumulado:
+                status[provider] = f"\u2713{len(acumulado)}"
+            elif erro_provider:
+                status[provider] = f"\u2717{erro_provider[:40]}"
+            else:
+                status[provider] = "vazio"
 
         # Rodada a rodada: 1º de cada banco, 2º de cada banco…
         combinado: list = []
@@ -330,7 +384,36 @@ class StockDatabase:
         return StockSearch(
             query=query, provider="all",
             results=combinado[:max_results], total=len(combinado),
+            status=status,
         )
+
+    def _termos_ia(self, texto: str, num_terms: int = 5) -> list[str]:
+        """Termos de busca EN via IA genérica (chave do config).
+
+        ⚠️ NOVO (24/09/2026). Sempre [] quando desabilitada, sem chave
+        ou indisponivel — quem chama segue com o caminho determinístico.
+        A IA não busca: só traduz a intenção (letra/consulta PT →
+        termos visuais EN que os bancos indexam).
+        """
+        if not getattr(self.config, "stock_ia_enabled", True):
+            return []
+        chave = getattr(self.config, "stock_ia_api_key", "") or ""
+        if not chave.strip():
+            return []
+        try:
+            from MusicClipStudio import ia_busca
+            termos = ia_busca.termos_de_texto(
+                texto, num_terms=num_terms, chave=chave,
+                modelo=getattr(self.config, "stock_ia_model", ""),
+                base_url=getattr(self.config, "stock_ia_base_url", ""),
+                cache_dir=self._cache_dir,
+            )
+            if termos:
+                print(f"[StockDB] Termos IA ({ia_busca.detectar_provedor(chave)}): {termos}")
+            return termos
+        except Exception as e:
+            print(f"[StockDB] IA de busca indisponivel: {e}")
+            return []
 
     def baixar(self, url: str, destino: str) -> Optional[str]:
         """Baixa mídia de URL para caminho local."""
@@ -1065,8 +1148,17 @@ class StockDatabase:
             return []
 
     def _gerar_terms_via_llm(self, letra: str, num_terms: int = 5) -> list[str]:
-        """Chama Gemini para gerar search terms visuais."""
+        """Gera search terms visuais com IA.
+
+        ⚠️ ATUALIZADO (24/09/2026): primeiro tenta a chave GENÉRICA do
+        diálogo de chaves (Gemini/Groq/OpenRouter — ver ia_busca.py);
+        sem ela, cai no caminho antigo (api_gemini do config_ia.json).
+        """
         import json
+
+        termos_ia = self._termos_ia(letra, num_terms)
+        if termos_ia:
+            return termos_ia
 
         # Ler config de IA
         config_path = Path(__file__).parent.parent / "config_ia.json"
@@ -1189,11 +1281,17 @@ Rules:
     ) -> list[StockMedia]:
         """Busca massiva estilo MoneyPrinter.
 
-        Foca em Pexels + Pixabay (que funcionam bem).
-        Coverr e Giphy retornam lixo - desativados.
+        ⚠️ ATUALIZADO (24/09/2026): antes FORCAVA pexels+pixabay — era a
+        segunda causa do "vem coisa de 1 banco só" (quando o Pixabay
+        estourava cota, tudo virava Pexels). Agora usa os bancos
+        HABILITADOS no config, exceto coverr/giphy (avaliados como
+        "retornam lixo" — decisão antiga mantida). Lista explícita
+        continua sendo respeitada quando passada.
         """
-        # APENAS Pexels e Pixabay ( Coverr/Giphy irrelevantes)
-        providers = ["pexels", "pixabay"]
+        if providers is None:
+            providers = [p for p in ("pexels", "pixabay", "unsplash",
+                                     "nasa", "openverse")
+                         if self._is_enabled(p)] or ["pexels"]
 
         all_results = []
         seen_urls = set()
