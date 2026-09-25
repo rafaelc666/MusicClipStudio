@@ -9,6 +9,7 @@ import {
   ArrowRight, ArrowLeft, Wand2, Upload, FileText as FileIcon,
   Download, Play, Pause, Sparkles, Search, ImagePlus,
   CheckCircle2, MonitorPlay, FolderOpen, Music as MusicIconI, Trash2, Clock,
+  ArrowUp, ArrowDown, Layers, X, ExternalLink,
 } from "lucide-react";
 import { WizardStepper } from "@/components/studio/WizardStepper";
 import { STUDIO_STEPS, type StudioStepKey } from "@/components/studio/StudioSidebar";
@@ -17,7 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useStudio } from "@/app/studio/StudioClientShell";
+import { useStudio, type FaixaAudio } from "@/app/studio/StudioClientShell";
+import { BuscaEpidemic } from "@/components/studio/BuscaEpidemic";
 import { cn, API_BASE } from "@/lib/utils";
 import { authApi, type ResumoProvedores } from "@/lib/auth-api";
 import { useAuth } from "@/components/studio/AuthProvider";
@@ -190,6 +192,31 @@ const SITES_DAS_CHAVES: Array<{
   },
 ];
 
+/**
+ * ⚠️ NOVO (24/09/2026) — TRILHA SONORA.
+ *
+ * Fica SEPARADO dos bancos de mídia de propósito: aqueles rendem foto e
+ * vídeo pra galeria (e a etapa 05 conta "N de 7"); este rende ÁUDIO, que
+ * vai pra Etapa 03. Misturar os dois faria o contador mentir.
+ *
+ * Nem toda chave de áudio é igual — e a tela avisa o que cada uma NÃO faz:
+ *  • Epidemic Sound = catálogo de MÚSICA de verdade, com licença comercial,
+ *    mas exige acordo de parceria (não é chave grátis).
+ *  • Pixabay NÃO entra aqui: a API dele só serve foto e vídeo — música no
+ *    Pixabay é download manual no site (testado em 24/09/2026).
+ */
+const SITES_DE_TRILHA: Array<{
+  id: string; nome: string; site: string; tipo: string;
+  gratis: boolean; variavel: string; como: string; aviso?: string;
+}> = [
+  {
+    id: "epidemic", nome: "Epidemic Sound", site: "https://developers.epidemicsound.com/docs/",
+    tipo: "música", gratis: false, variavel: "EPIDEMIC_API_KEY",
+    como: "Partner API: crie a chave no Developer Portal (coluna de API key) e o app busca o catálogo e baixa a faixa direto pra sequência.",
+    aviso: "Não é chave grátis — depende de acordo de parceria. Licença comercial conforme o contrato.",
+  },
+];
+
 function Step0Chaves({ onNext }: { onNext: () => void }) {
   const { usuario } = useAuth();
   const [resumo, setResumo] = React.useState<ResumoProvedores | null>(null);
@@ -209,6 +236,9 @@ function Step0Chaves({ onNext }: { onNext: () => void }) {
   const porId = React.useMemo(() => {
     const m = new Map<string, { configurada: boolean; previa: string; habilitado: boolean }>();
     resumo?.fixos.forEach((p) => m.set(p.id, p));
+    // ⚠️ 24/09: as chaves de áudio vivem no MESMO cofre do usuário — então o
+    // card da trilha também mostra "configurado" quando ele já colou a dele.
+    resumo?.audio?.forEach((p) => m.set(p.id, p));
     return m;
   }, [resumo]);
 
@@ -282,6 +312,82 @@ function Step0Chaves({ onNext }: { onNext: () => void }) {
           </div>
         </>
       )}
+
+      {/* ⚠️ NOVO (24/09/2026) — trilha sonora. Fora do bloco acima de
+          propósito: não entram no contador "N de 7" (o contador é de bancos de
+          MÍDIA). Mesmo assim, a chave é salva na SUA conta no banco
+          (criptografada, igual às dos bancos) — o .env é só o padrão da
+          instalação, usado quando você ainda não colou a sua. */}
+      <div className="mt-2 border-t border-white/8 pt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-[14px] font-semibold text-fg-0">Trilha sonora</h3>
+          <span className="rounded-full border border-white/15 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wide text-fg-3">
+            opcional
+          </span>
+        </div>
+        <p className="mt-1 text-[12px] leading-relaxed text-fg-2">
+          As chaves acima são de <b>foto e vídeo</b>. Esta é de <b>áudio</b> e entra
+          na <b>etapa 03</b> — a faixa baixada aqui vira uma música da sequência, do mesmo
+          jeito que um arquivo que você enviasse. São opcionais: sem elas, a etapa 03
+          continua funcionando com upload manual. Guarde-as no botão <b>colar chave</b>:
+          ficam <b>salvas na sua conta</b>, criptografadas, como as dos bancos de mídia.
+        </p>
+      </div>
+
+      <div className="grid gap-2.5">
+        {SITES_DE_TRILHA.map((b) => {
+          const st = porId.get(b.id);
+          return (
+            <div
+              key={b.id}
+              className="rounded-sm border border-l-2 border-white/10 border-l-neon/40 bg-bg-2/40 p-3.5"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[13.5px] font-medium text-fg-0">{b.nome}</span>
+                <span className="text-[10.5px] font-mono text-fg-3">{b.tipo}</span>
+                <span
+                  className={cn(
+                    "rounded-full border px-1.5 py-0.5 text-[9.5px]",
+                    b.gratis
+                      ? "border-emerald-500/30 text-emerald-300"
+                      : "border-amber-500/30 text-amber-200",
+                  )}
+                >
+                  {b.gratis ? "grátis" : "exige parceria"}
+                </span>
+                {st?.configurada ? (
+                  <Badge variant="neon" className="text-[9.5px]">✓ configurado {st.previa}</Badge>
+                ) : (
+                  <span className="rounded-full border border-white/15 px-1.5 py-0.5 font-mono text-[9.5px] text-fg-3">
+                    {b.variavel}
+                  </span>
+                )}
+                <a
+                  href={b.site}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto inline-flex items-center gap-1 rounded-sm border border-neon/40 px-2 py-1 text-[11px] text-neon transition-colors hover:bg-neon/10"
+                >
+                  Abrir site da chave <ArrowRight className="h-3 w-3" />
+                </a>
+              </div>
+              <p className="mt-1.5 text-[11.5px] leading-relaxed text-fg-3">{b.como}</p>
+              {b.aviso ? (
+                <p className="mt-1 text-[11.5px] leading-relaxed text-amber-200/85">⚠ {b.aviso}</p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event("mcs:abrir-provedores"))}
+                className="mt-1.5 text-[11.5px] font-medium text-neon/90 underline-offset-2 hover:underline"
+              >
+                {st?.configurada
+                  ? "ver/colar a chave no diálogo"
+                  : "→ colar a chave aqui (salva na sua conta)"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
 
       <div className="flex justify-end pt-1">
         <Button variant="neon" onClick={onNext}>
@@ -926,8 +1032,13 @@ function Step2Legenda({ onNext }: { onNext: () => void }) {
 function Step3Audio() {
   const { state, setState } = useStudio();
   const [enviando, setEnviando] = React.useState(false);
+  const [juntando, setJuntando] = React.useState(false);
   const [progresso, setProgresso] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  // ⚠️ NOVO (24/09/2026) — input SEPARADO da playlist: aqui tudo é ACRESCENTADO
+  // à sequência, mesmo 1 arquivo só. Sem isso, escolher 1 música pelo cartão
+  // "Várias músicas" trocaria a música do clipe em vez de entrar na fila.
+  const inputFaixasRef = React.useRef<HTMLInputElement>(null);
   const audioRef = React.useRef<HTMLAudioElement>(null);
 
   const [tocando, setTocando] = React.useState(false);
@@ -1081,8 +1192,11 @@ function Step3Audio() {
   };
 
   const aoEscolher = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) void enviarArquivo(f);
+    const arquivos = Array.from(e.target.files ?? []);
+    // 1 arquivo = o fluxo de sempre (a música do clipe). 2+ = playlist do
+    // crossfade: entram na lista e só viram faixa única ao clicar em Juntar.
+    if (arquivos.length === 1) void enviarArquivo(arquivos[0]);
+    else if (arquivos.length > 1) void anexarFaixas(arquivos);
     // permite reenviar o mesmo arquivo depois
     e.target.value = "";
   };
@@ -1123,6 +1237,207 @@ function Step3Audio() {
     });
   };
 
+  /**
+   * ⚠️ NOVO (24/09/2026) — envia 2+ músicas de uma vez pra playlist do
+   * crossfade. Elas NÃO substituem a música do clipe ainda: viram a receita
+   * que "Juntar com crossfade" transforma numa faixa única. Se a playlist
+   * estava vazia e já havia uma música carregada, ela entra como faixa 1 —
+   * senão a junção sairia sem a música que está na tela.
+   */
+  const anexarFaixas = async (arquivos: File[]) => {
+    const validos: File[] = [];
+    for (const f of arquivos) {
+      if (/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(f.name)) validos.push(f);
+      else
+        toast.error(`Formato não suportado: ${f.name}`, {
+          description: "Use .mp3, .wav, .m4a, .aac, .ogg ou .flac",
+        });
+    }
+    if (!validos.length) return;
+
+    setEnviando(true);
+    const id = toast.loading(`Enviando ${validos.length} músicas…`);
+    try {
+      const novas: FaixaAudio[] = [];
+      for (const f of validos) {
+        const fd = new FormData();
+        fd.append("file", f);
+        const resp = await fetch(`${API_BASE}/api/upload/audio`, {
+          method: "POST",
+          body: fd,
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const duracao = Math.round(await medirDuracao(URL.createObjectURL(f)));
+        novas.push({
+          path: data.path,
+          url: data.url,
+          nome: f.name,
+          tamanhoBytes: data.size_bytes,
+          duracao: duracao || undefined,
+        });
+      }
+      setState((s) => {
+        const atual = s.faixasAudio ?? [];
+        const base: FaixaAudio[] = atual.length
+          ? atual
+          : s.musica.arquivo
+            ? [{
+                path: s.musica.arquivo,
+                url: s.musica.url ?? "",
+                nome: s.musica.nomeArquivo ?? "música 1",
+                tamanhoBytes: s.musica.tamanhoBytes ?? 0,
+                duracao: s.musica.duracao,
+              }]
+            : [];
+        const lista = [...base];
+        for (const n of novas) {
+          if (!lista.some((x) => x.path === n.path)) lista.push(n);
+        }
+        // Ficou UMA faixa só e o clipe ainda não tem música? Ela é a música —
+        // senão a etapa ficaria "vazia" depois de o usuário enviar um arquivo.
+        const unica = lista.length === 1 ? lista[0] : null;
+        const musica =
+          unica && !s.musica.arquivo
+            ? {
+                arquivo: unica.path,
+                url: unica.url,
+                nomeArquivo: unica.nome,
+                duracao: unica.duracao ?? s.musica.duracao,
+                tamanhoBytes: unica.tamanhoBytes,
+              }
+            : s.musica;
+        return { ...s, faixasAudio: lista, musica };
+      });
+      toast.success(`${novas.length} música(s) na sequência`, {
+        id,
+        description: "Ordene como quiser e clique em “Juntar com crossfade” pra virar uma faixa só.",
+      });
+    } catch (e) {
+      toast.error("Falha ao enviar as músicas", {
+        id,
+        description:
+          e instanceof Error && e.message.startsWith("HTTP")
+            ? "O backend recusou o arquivo. Ele está rodando?"
+            : "Backend offline — suba com RUN_WEB.sh e tente de novo.",
+      });
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  /**
+   * Junta a playlist numa faixa única com crossfade (POST /api/audio/juntar).
+   * O resultado vira `state.musica`, então o resto do pipeline (e o engine)
+   * segue sem saber que eram várias músicas — a duração da faixa manda no
+   * tamanho do clipe.
+   */
+  const juntarFaixas = async () => {
+    const lista = state.faixasAudio ?? [];
+    if (lista.length < 2) {
+      toast.error("Adicione pelo menos 2 músicas", {
+        description: "A junção precisa de duas faixas ou mais.",
+      });
+      return;
+    }
+    setJuntando(true);
+    const id = toast.loading(`Juntando ${lista.length} músicas com crossfade…`);
+    try {
+      const r = await fetch(`${API_BASE}/api/audio/juntar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          faixas: lista.map((f) => f.path),
+          crossfade: state.crossfadeSeg ?? 2,
+        }),
+      });
+      if (!r.ok) {
+        const detalhe = await r.json().catch(() => null);
+        throw new Error(
+          detalhe && detalhe.detail ? String(detalhe.detail) : `HTTP ${r.status}`,
+        );
+      }
+      const d = await r.json();
+      // A faixa em uso muda: para o player que estava tocando a antiga.
+      audioRef.current?.pause();
+      setTocando(false);
+      setTempoAtual(0);
+      setState((s) => ({
+        ...s,
+        musica: {
+          arquivo: d.path,
+          url: d.url,
+          nomeArquivo: `Faixa juntada (${d.faixas} músicas)`,
+          duracao: Math.round(d.duracao) || s.musica.duracao,
+          tamanhoBytes: d.size_bytes,
+        },
+      }));
+      setRecentes(null);
+      toast.success("Faixa única pronta", {
+        id,
+        description: `${d.faixas} músicas · ${formatarDuracao(d.duracao)} · crossfade ${d.crossfade}s`,
+      });
+    } catch (e) {
+      toast.error("Não deu pra juntar as músicas", {
+        id,
+        description: e instanceof Error ? e.message : "Falha inesperada no FFmpeg.",
+      });
+    } finally {
+      setJuntando(false);
+    }
+  };
+
+  const moverFaixa = (indice: number, passo: number) => {
+    setState((s) => {
+      const lista = [...(s.faixasAudio ?? [])];
+      const destino = indice + passo;
+      if (destino < 0 || destino >= lista.length) return s;
+      const a = lista[indice];
+      const b = lista[destino];
+      if (!a || !b) return s;
+      lista[indice] = b;
+      lista[destino] = a;
+      return { ...s, faixasAudio: lista };
+    });
+  };
+
+  const removerFaixa = (indice: number) => {
+    setState((s) => ({
+      ...s,
+      faixasAudio: (s.faixasAudio ?? []).filter((_, i) => i !== indice),
+    }));
+  };
+
+  /** ⚠️ 24/09: faixa pronta do Epidemic baixada direto pra sequência. Vira
+   *  uma faixa da playlist e, se ainda não havia música, já assume o clipe. */
+  const adicionarFaixaBaixada = (faixa: FaixaAudio) => {
+    setState((s) => ({
+      ...s,
+      faixasAudio: [...(s.faixasAudio ?? []), faixa],
+      musica: s.musica?.arquivo
+        ? s.musica
+        : {
+            ...s.musica,
+            arquivo: faixa.path,
+            url: faixa.url,
+            nomeArquivo: faixa.nome,
+            duracao: Math.round(faixa.duracao ?? s.musica.duracao),
+            tamanhoBytes: faixa.tamanhoBytes,
+          },
+    }));
+  };
+
+  const faixas = state.faixasAudio ?? [];
+  const crossfade = state.crossfadeSeg ?? 2;
+  // Soma das faixas menos as sobreposições — é a duração que o clipe vai ter.
+  const duracaoEstimada = Math.max(
+    0,
+    faixas.reduce((soma, f) => soma + (f.duracao ?? 0), 0) -
+      crossfade * Math.max(0, faixas.length - 1),
+  );
+  /** A música em uso já é a junção da playlist? (o backend nomeia com "junta_") */
+  const musicaEJuntada = Boolean(state.musica.arquivo?.includes("junta_"));
+
   return (
     <div className="flex flex-col gap-5">
       <StepHeader
@@ -1145,6 +1460,7 @@ function Step3Audio() {
           <input
             ref={inputRef}
             type="file"
+            multiple
             accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
             className="hidden"
             onChange={aoEscolher}
@@ -1199,8 +1515,9 @@ function Step3Audio() {
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
-                  const f = e.dataTransfer.files?.[0];
-                  if (f) void enviarArquivo(f);
+                  const arquivos = Array.from(e.dataTransfer.files ?? []);
+                  if (arquivos.length === 1) void enviarArquivo(arquivos[0]);
+                  else if (arquivos.length > 1) void anexarFaixas(arquivos);
                 }}
                 disabled={enviando}
                 className={cn(
@@ -1324,21 +1641,26 @@ function Step3Audio() {
             </div>
           </div>
 
-          {/* ⚠️ NOVO (23/09/2026) — ONDE CONSEGUIR MÚSICA: o wizard pede a
-              música pronta, mas não diz onde achar uma legal para usar.
-              Bancos gratuitos com licença para clipes (conferir a licença
-              de cada faixa — algumas pedem crédito). */}
+          {/* ⚠️ NOVO (23/09/2026) · REVISADO (24/09/2026) — ONDE CONSEGUIR MÚSICA.
+              São DUAS famílias bem diferentes, e a tela agora diz qual é qual:
+                • download manual (grátis, licença varia — crédito às vezes);
+                • chave de API (cadastrada na etapa 01).
+              O Pixabay fica no primeiro grupo DE PROPÓSITO: a API dele só serve
+              foto e vídeo (testado em 24/09/2026), então música dele é SEMPRE
+              download manual no site. */}
           <div className="rounded-md border border-white/8 bg-bg-2/40 p-4">
-            <div className="flex items-center gap-2">
-              <span className="text-[12px] font-semibold text-fg-1">
-                Sem música? Bancos gratuitos para clipes:
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <span className="text-[12px] font-semibold text-fg-1">
+              Sem música? Onde conseguir
+            </span>
+
+            <p className="mt-2.5 text-[10.5px] uppercase tracking-wide text-fg-3">
+              Download manual · baixe e envie acima
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
               {[
+                { nome: "Pixabay Music", url: "https://pixabay.com/music/", nota: "sem atribuição" },
                 { nome: "YouTube Audio Library", url: "https://studio.youtube.com/channel/UC/music", nota: "grátis com crédito" },
                 { nome: "Free Music Archive", url: "https://freemusicarchive.org", nota: "por licença CC" },
-                { nome: "Pixabay Music", url: "https://pixabay.com/music/", nota: "sem atribuição" },
                 { nome: "Incompetech", url: "https://incompetech.com/music/royalty-free/", nota: "crédito obrigatório" },
                 { nome: "Chosic", url: "https://www.chosic.com/free-music/", nota: "agrega várias fontes" },
               ].map((b) => (
@@ -1354,10 +1676,201 @@ function Step3Audio() {
                 </a>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-fg-3">
-              Baixe a faixa e envie acima — a duração dela define o tamanho do clipe.
+
+            <p className="mt-3.5 text-[10.5px] uppercase tracking-wide text-fg-3">
+              Com chave de API · cadastre na etapa 01
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {[
+                { nome: "Epidemic Sound", url: "https://developers.epidemicsound.com/docs/", nota: "música · exige parceria" },
+              ].map((b) => (
+                <a
+                  key={b.nome}
+                  href={b.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  title={b.nota}
+                  className="rounded-full border border-neon/25 bg-neon/5 px-2.5 py-1 text-[11px] text-fg-1 transition-colors hover:border-neon/50 hover:text-fg-0"
+                >
+                  {b.nome} <span className="text-[9.5px] text-neon/80">· {b.nota}</span>
+                </a>
+              ))}
+            </div>
+
+            <p className="mt-3 text-[11px] leading-relaxed text-fg-3">
+              A duração da faixa define o tamanho do clipe. O <b>Pixabay</b> é o mais
+              amigável pro YouTube porque <b>não exige atribuição</b>, mas a API dele
+              só serve fotos e vídeos: música dele vem por download manual.
             </p>
           </div>
+
+          {/* ⚠️ NOVO (24/09/2026): busca no catálogo do Epidemic Sound — baixa a
+              faixa e joga direto na sequência, sem sair da Etapa 03. */}
+          <BuscaEpidemic aoBaixar={adicionarFaixaBaixada} />
+        </CardContent>
+      </Card>
+
+      {/* ⚠️ NOVO (24/09/2026) — VÁRIAS MÚSICAS NUMA FAIXA SÓ.
+          O engine monta o clipe a partir da duração de UMA faixa
+          (engine._duracao_do_clipe), então a playlist é juntada com crossfade
+          ANTES: fotos e vídeos se distribuem ao longo de todas as músicas sem
+          o motor precisar saber que eram várias. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-neon" />
+            Várias músicas em sequência
+          </CardTitle>
+          <CardDescription>
+            Adicione 2 ou mais músicas, ordene como quiser e junte numa faixa só com
+            crossfade. O clipe inteiro passa a ter a duração da faixa juntada.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <input
+            ref={inputFaixasRef}
+            type="file"
+            multiple
+            accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+            className="hidden"
+            onChange={(e) => {
+              const arquivos = Array.from(e.target.files ?? []);
+              if (arquivos.length) void anexarFaixas(arquivos);
+              e.target.value = "";
+            }}
+          />
+          {faixas.length === 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={enviando}
+              onClick={() => inputFaixasRef.current?.click()}
+            >
+              <Upload className="h-4 w-4" /> Escolher as músicas
+            </Button>
+          ) : (
+            <>
+              <ol className="space-y-1.5">
+                {faixas.map((faixa, i) => (
+                  <li
+                    key={faixa.path}
+                    className="flex items-center gap-2 rounded-sm border border-white/8 bg-bg-2/50 px-3 py-2"
+                  >
+                    <span className="w-5 shrink-0 font-mono text-[11px] text-fg-3">
+                      {i + 1}
+                    </span>
+                    <span
+                      className="min-w-0 flex-1 truncate text-[12.5px] text-fg-1"
+                      title={faixa.nome}
+                    >
+                      {faixa.nome}
+                    </span>
+                    {faixa.duracao ? (
+                      <span className="shrink-0 font-mono text-[11px] text-fg-3">
+                        {formatarDuracao(faixa.duracao)}
+                      </span>
+                    ) : null}
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => moverFaixa(i, -1)}
+                        disabled={i === 0}
+                        title="Subir na sequência"
+                        className="rounded-sm p-1 text-fg-3 transition-colors hover:text-fg-0 disabled:opacity-25"
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moverFaixa(i, 1)}
+                        disabled={i === faixas.length - 1}
+                        title="Descer na sequência"
+                        className="rounded-sm p-1 text-fg-3 transition-colors hover:text-fg-0 disabled:opacity-25"
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removerFaixa(i)}
+                        title="Tirar da sequência"
+                        className="rounded-sm p-1 text-fg-3 transition-colors hover:text-err"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+
+              <label className="flex flex-wrap items-center gap-2 text-[12px] text-fg-2">
+                Crossfade
+                <Input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  value={crossfade}
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(10, Number(e.target.value) || 0));
+                    setState((s) => ({ ...s, crossfadeSeg: v }));
+                  }}
+                  className="h-8 w-20"
+                />
+                <span className="text-fg-3">
+                  segundos de sobreposição entre uma e a seguinte (0 = corte seco)
+                </span>
+              </label>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-3">
+                <span className="text-[11.5px] text-fg-3">
+                  {faixas.length} música(s) · {formatarDuracao(duracaoEstimada)}
+                  {crossfade > 0 && faixas.length > 1
+                    ? ` (já descontando ${(crossfade * (faixas.length - 1)).toFixed(1)}s de crossfade)`
+                    : ""}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={enviando}
+                    onClick={() => inputFaixasRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4" /> Adicionar
+                  </Button>
+                  <Button
+                    variant="neon"
+                    size="sm"
+                    disabled={juntando || faixas.length < 2}
+                    onClick={() => void juntarFaixas()}
+                  >
+                    {juntando ? "Juntando…" : "Juntar com crossfade"}
+                  </Button>
+                </div>
+              </div>
+
+              {faixas.length > 1 && !musicaEJuntada ? (
+                <p className="rounded-sm border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[11.5px] leading-relaxed text-amber-200/90">
+                  Você tem {faixas.length} músicas na sequência, mas o clipe ainda usa só
+                  “{state.musica.nomeArquivo ?? "a música atual"}”. Clique em{" "}
+                  <b>Juntar com crossfade</b> antes de gerar.
+                </p>
+              ) : null}
+            </>
+          )}
+
+          <p className="text-[11px] leading-relaxed text-fg-3">
+            Quer mais faixas? O Pixabay Music é grátis e não exige atribuição{" "}
+            <a
+              href="https://pixabay.com/music/"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-0.5 text-neon hover:underline"
+            >
+              abrir pixabay.com/music <ExternalLink className="h-3 w-3" />
+            </a>{" "}
+            — o download é manual (a API do Pixabay só serve fotos e vídeos), depois
+            arraste os arquivos aqui que eles entram na sequência.
+          </p>
         </CardContent>
       </Card>
     </div>

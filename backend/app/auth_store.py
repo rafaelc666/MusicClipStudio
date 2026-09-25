@@ -45,8 +45,20 @@ PROVEDORES_FIXOS = [
 # quiser (⚠️ 23/09/2026: antes eram 2 fixos). Cada slot aponta para a API
 # que o banco usa (mesma engine de um provedor fixo), então o motor de
 # busca sabe como consultá-lo.
+# ⚠️ NOVO (24/09/2026) — CHAVES DE ÁUDIO TAMBÉM POR USUÁRIO.
+#
+# A trilha (Epidemic Sound) entra no MESMO cofre do
+# usuário: criptografada com Fernet em output/usuarios.db, junto do login.
+# Antes existiam só no .env (globais) — pedido do dono: "as chaves têm que
+# salvar com o usuário no DB". O .env continua valendo como PADRÃO de
+# instalação: se o usuário não colou a dele, o backend usa a do .env.
+PROVEDORES_AUDIO = [
+    {"id": "epidemic",  "nome": "Epidemic Sound", "tipo": "musica",           "chave_em": "epidemic_api_key"},
+]
+
 PROV_POR_ID = {p["id"]: p for p in PROVEDORES_FIXOS}
 TIPOS_VALIDOS = set(PROV_POR_ID.keys())
+AUDIO_POR_ID = {p["id"]: p for p in PROVEDORES_AUDIO}
 
 # Sessões expiram em 30 dias (usuário não fica logando todo dia).
 SESSAO_TTL_S = 30 * 24 * 3600
@@ -340,7 +352,9 @@ class AuthStore:
                     else:
                         custom[idx].pop("url", None)
             else:
-                ids_validos = {p["id"] for p in PROVEDORES_FIXOS}
+                # ⚠️ 24/09: aceita também a chave de ÁUDIO (epidemic),
+                # que fica no mesmo campo `chaves` do usuário.
+                ids_validos = {p["id"] for p in PROVEDORES_FIXOS} | set(AUDIO_POR_ID.keys())
                 if provedor_id not in ids_validos:
                     raise ValueError("Provedor desconhecido")
                 if chave is not None:
@@ -475,7 +489,41 @@ class AuthStore:
                 "url": str(c.get("url") or ""),  # ⚠️ 23/09: endpoint custom do banco
                 "url_oficial": self._url_oficial(c.get("tipo") or "pexels"),
             })
-        return {"ok": True, "fixos": fixos, "custom": slots}
+        # ⚠️ NOVO (24/09/2026): chaves de ÁUDIO do usuário (trilha/efeitos),
+        # no mesmo formato dos fixos — a UI mostra em bloco separado.
+        audio = []
+        for p in PROVEDORES_AUDIO:
+            blob = chaves_blob.get(p["id"], "")
+            chave = self._decripto(self._fernet, blob) if blob else ""
+            audio.append({
+                "id": p["id"],
+                "nome": p["nome"],
+                "tipo": p["tipo"],
+                "configurada": bool(chave),
+                "previa": self._previa(chave) if chave else "",
+            })
+
+        return {"ok": True, "fixos": fixos, "custom": slots, "audio": audio}
+
+    def chaves_audio(self, user_id: str) -> dict[str, str]:
+        """Chaves de áudio do usuário, DECRIPTOGRAFADAS (uso interno).
+
+        Devolve no formato do ClipConfig (`chave_em`): `epidemic_api_key`.
+        Vazio = usuário não colou a dele (cai no .env).
+        """
+        with self._lock:
+            row = self._conn.execute("SELECT chaves FROM usuarios WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            return {}
+        chaves_blob = json.loads(row["chaves"] or "{}")
+        saida: dict[str, str] = {}
+        for p in PROVEDORES_AUDIO:
+            blob = chaves_blob.get(p["id"], "")
+            if blob:
+                valor = self._decripto(self._fernet, blob)
+                if valor:
+                    saida[p["chave_em"]] = valor
+        return saida
 
     def chaves_para_busca(self, user_id: str) -> dict[str, str]:
         """Chaves DECRIPTOGRAFADAS — só para uso interno na busca.

@@ -320,6 +320,21 @@ export function ProvedoresDialog({ aberto, onFechar }: { aberto: boolean; onFech
                 {/* ⚠️ 23/09/2026: slots próprios ILIMITADOS — adicionar quantos
                     bancos quiser, escolhendo qual engine de busca ele usa. */}
                 <AddCustomForm onSalvo={setResumo} />
+
+                {/* ⚠️ NOVO (24/09/2026): chaves de ÁUDIO — trilha (Epidemic
+                    Sound). Ficam no MESMO cofre do
+                    usuário e são usadas na Etapa 03; entram fora do contador
+                    de bancos de mídia de propósito. */}
+                {resumo.audio && resumo.audio.length > 0 && (
+                  <>
+                    <p className="mt-3 text-[11px] uppercase tracking-wide text-fg-3 font-mono">
+                      áudio — trilha (opcional)
+                    </p>
+                    {resumo.audio.map((p) => (
+                      <LinhaProvedor key={p.id} p={p} onSalvo={setResumo} />
+                    ))}
+                  </>
+                )}
               </div>
             )}
 

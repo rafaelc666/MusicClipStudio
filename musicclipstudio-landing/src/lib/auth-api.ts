@@ -25,7 +25,14 @@ export type ProvedorEstado = {
   url_oficial?: string;
 };
 
-export type ResumoProvedores = { ok: boolean; fixos: ProvedorEstado[]; custom: ProvedorEstado[] };
+// ⚠️ 24/09/2026: `audio` = chaves de trilha do usuário (epidemic),
+// guardadas no mesmo cofre criptografado dos bancos de mídia.
+export type ResumoProvedores = {
+  ok: boolean;
+  fixos: ProvedorEstado[];
+  custom: ProvedorEstado[];
+  audio?: ProvedorEstado[];
+};
 
 async function post<T>(caminho: string, corpo?: unknown): Promise<T> {
   const r = await fetch(`${API_BASE}${caminho}`, {

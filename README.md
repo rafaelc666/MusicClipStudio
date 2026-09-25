@@ -40,8 +40,10 @@ de mídia na **etapa 01** (a tela traz o link de cada site e explica como criar 
 
 ## 🔑 Chaves de API
 
-Todas gratuitas. O `.env` nunca é commitado; dentro do app cada usuário também pode
-colar as chaves próprias (criptografadas no banco local, `output/usuarios.db`).
+O `.env` nunca é commitado; dentro do app cada usuário também pode colar as chaves
+próprias (criptografadas no banco local, `output/usuarios.db`).
+
+**Mídia — fotos e vídeos** (todas gratuitas):
 
 | Banco | Onde criar |
 |---|---|
@@ -52,6 +54,17 @@ colar as chaves próprias (criptografadas no banco local, `output/usuarios.db`).
 | Coverr | https://coverr.co |
 | Giphy | https://developers.giphy.com/ |
 | Openverse | https://api.openverse.org/ |
+
+**Áudio — trilha** (opcional: a etapa 03 funciona sem ela):
+
+| Serviço | O que dá | Onde criar |
+|---|---|---|
+| Epidemic Sound | música, com licença comercial | https://developers.epidemicsound.com/docs/ |
+
+> ⚠️ **Nem tudo aqui é grátis.** O Epidemic Sound **não** é chave grátis: é a
+> *Partner API*, que exige acordo de parceria, e a licença comercial segue o
+> contrato. E o **Pixabay não serve música pela API** (só fotos e vídeos,
+> confirmado em 24/09/2026): música lá é download manual no site.
 
 ## 🧪 Testes
 

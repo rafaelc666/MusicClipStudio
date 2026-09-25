@@ -8,7 +8,7 @@
 O Studio roda **100% na sua máquina** (`127.0.0.1`), sem servidores externos
 recebendo seus dados. Os ativos sensíveis são:
 
-1. **Suas chaves de API** (bancos de mídia + HuggingFace)
+1. **Suas chaves de API** (bancos de mídia, trilha/efeitos de áudio e HuggingFace)
 2. **Suas senhas de conta** (login local do app)
 3. **Seus projetos** (letras, mídia baixada, clipes renderizados)
 
@@ -22,13 +22,16 @@ recebendo seus dados. Os ativos sensíveis são:
 | Sessão | Cookie **`httponly` + `samesite=lax`**, token aleatório de 256 bits, expira em 30 dias; imune a XSS (JS não lê o cookie) | cookie do navegador |
 | Segredo Fernet | Arquivo `0600` (só o dono do processo lê); criado já com permissão correta | `output/.mcs_secret_key` |
 | Rede | Backend e frontend **só em `127.0.0.1`** — nada escutado na rede | `RUN_WEB.sh` |
-| Chaves no `.env` | Fora do repositório (`.gitignore`); `.env.example` distribuído vazio | seu disco |
+| Chaves no `.env` | Fora do repositório (`.gitignore`); `.env.example` distribuído **vazio**; o `PUBLICAR_GITHUB.sh` roda uma **auditoria que aborta o push** se algum valor do `.env` aparecer em arquivo versionado | seu disco |
+| Chaves de áudio (Epidemic Sound) | Lidas **só no backend**; o navegador nunca recebe o valor — o front fala com `/api/musica/…` e o backend assina a chamada | `.env` |
 
 ## O que o app NÃO faz
 
 - **Não envia** suas chaves, letras ou mídia para nenhum servidor dos autores.
   As únicas chamadas externas são para as APIs dos **próprios bancos de mídia**
-  (Pexels, Pixabay, …) e para o HuggingFace (download do modelo Whisper).
+  (Pexels, Pixabay, …), para os serviços de **áudio** que você configurar
+  (Epidemic Sound) e para o HuggingFace (download do modelo Whisper).
+  As chaves de áudio ficam **só no backend** — o navegador nunca recebe o valor.
 - **Não telemetria, não analytics, não rastreamento.**
 
 ## Limitações honestas

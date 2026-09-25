@@ -40,6 +40,18 @@ export const ESTILO_PADRAO_LEGENDA: EstiloLegenda = {
   posicao: "baixo",
   negrito: false,
 };
+/**
+ * ⚠️ NOVO (24/09/2026) — uma música da playlist que será juntada numa faixa só.
+ * `path` é o nome do arquivo em output/uploads (o mesmo que
+ * POST /api/upload/audio devolve), e é ele que vai pra POST /api/audio/juntar.
+ */
+export interface FaixaAudio {
+  path: string;
+  url: string;
+  nome: string;
+  tamanhoBytes: number;
+  duracao?: number;
+}
 
 export interface StudioProjectState {
   id: string;
@@ -64,6 +76,16 @@ export interface StudioProjectState {
     nomeArquivo?: string;
     tamanhoBytes?: number;
   };
+  /**
+   * ⚠️ NOVO (24/09/2026) — músicas enviadas que ainda NÃO viraram faixa única.
+   * A ordem da lista é a ordem de execução no clipe, e "Juntar com crossfade"
+   * chama POST /api/audio/juntar pra produzir a faixa que o engine consome
+   * (`musica`). A lista NÃO vai pro backend: o que persiste é a faixa já
+   * juntada, que continua em output/uploads/.
+   */
+  faixasAudio?: FaixaAudio[];
+  /** Segundos de sobreposição entre uma música e a seguinte (0 = corte seco). */
+  crossfadeSeg?: number;
   imagens: any[];
   midia: any[];
   /** ⚠️ NOVO (23/09/2026) — tema visual livre digitado na etapa 04
@@ -103,6 +125,8 @@ const DEFAULT_STATE: StudioProjectState = {
   legenda: [],
   legendaEstilo: ESTILO_PADRAO_LEGENDA,
   musica: { duracao: 0 },
+  faixasAudio: [],
+  crossfadeSeg: 2,
   imagens: [],
   midia: [],
   formato: "9/16",

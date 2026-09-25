@@ -16,10 +16,15 @@ import sys
 import asyncio
 import dataclasses
 import json
+import os
+import re
 import uuid
 import threading
 import time
 import subprocess
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Any, Optional
 
@@ -180,6 +185,22 @@ class SearchMediaPayload(BaseModel):
 
 class TranscribePayload(BaseModel):
     audio_path: str  # caminho relativo em output/uploads
+
+
+class JuntarMusicasPayload(BaseModel):
+    """⚠️ NOVO (24/09/2026) — N músicas prontas viram UMA faixa.
+
+    O engine monta o clipe a partir da duração de UMA faixa
+    (`engine._duracao_do_clipe`), então juntar antes é o jeito de ter
+    várias músicas num clipe só sem tocar no motor: a faixa final dita a
+    duração e as fotos/vídeos se distribuem ao longo de todas elas.
+
+    `faixas` fica na ORDEM em que o usuário quer ouvir (nomes de arquivo
+    em `output/uploads/`); `crossfade` é quanto uma música invade a
+    seguinte, em segundos.
+    """
+    faixas: list[str] = Field(default_factory=list)
+    crossfade: float = 2.0
 
 
 class GeneratePayload(BaseModel):
@@ -552,10 +573,13 @@ def importar_chaves_globais(request: Request) -> dict[str, Any]:
         "coverr": "stock_coverr_api_key",
         "giphy": "stock_giphy_api_key",
         "openverse": "stock_openverse_api_key",
+        # ⚠️ 24/09/2026: a chave de ÁUDIO (trilha) também entra no
+        # cofre do usuário — aqui importamos as do .env de uma vez.
+        "epidemic": "epidemic_api_key",
     }
-    ja = {
-        p["id"] for p in _AUTH.resumo_provedores(usuario["id"])["fixos"] if p["configurada"]
-    }
+    ja = {p["id"] for p in (_AUTH.resumo_provedores(usuario["id"])["fixos"]
+                            + _AUTH.resumo_provedores(usuario["id"])["audio"])
+          if p["configurada"]}
     importadas: list[str] = []
     for pid, campo in mapa.items():
         if pid in ja:
@@ -732,6 +756,321 @@ def listar_uploads_recentes(request: Request, limite: int = 8) -> dict[str, Any]
     itens.sort(key=lambda it: it["mtime"], reverse=True)
     itens = itens[:max(1, min(limite, 50))]
     return {"ok": True, "total": len(itens), "itens": itens}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Etapa 03 · Várias músicas numa faixa só (crossfade)
+# ═══════════════════════════════════════════════════════════════════════
+
+_EXT_AUDIO = (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac")
+
+
+def _duracao_audio(caminho: Path) -> float:
+    """Duração em segundos, ou 0.0 se não der pra medir (nunca levanta)."""
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(caminho)],
+            capture_output=True, text=True, timeout=60,
+        )
+        return float((probe.stdout or "").strip() or 0.0)
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return 0.0
+
+
+@app.post("/api/audio/juntar", tags=["audio"])
+def juntar_musicas(payload: JuntarMusicasPayload, request: Request = None) -> dict[str, Any]:
+    """Junta N músicas prontas numa faixa só, com crossfade entre elas.
+
+    ⚠️ NOVO (24/09/2026). Devolve o MESMO formato de /api/upload/audio
+    (`path`, `url`, `size_bytes`) mais a `duracao` real da faixa final —
+    assim o wizard só troca a música corrente pelo resultado e o resto do
+    pipeline segue sem saber que eram várias.
+
+    O `acrossfade` do FFmpeg mistura DOIS streams por vez, então ele é
+    encadeado: (1 ✕ 2) → (r1 ✕ 3) → … Cada entrada é normalizada ANTES
+    (48 kHz, fltp, estéreo) porque o filtro exige formato idêntico dos
+    dois lados, e a música do usuário vem como vier. Crossfade maior que
+    a música faria o FFmpeg abortar, então ele é limitado à metade da
+    faixa mais curta — e vira corte seco quando não sobra folga.
+    """
+    if len(payload.faixas) < 2:
+        raise HTTPException(400, detail="envie pelo menos 2 músicas pra juntar")
+
+    # Só o NOME do arquivo: caminho vindo do cliente nunca toca no disco.
+    caminhos: list[Path] = []
+    for bruto in payload.faixas:
+        nome = Path(str(bruto)).name
+        caminho = UPLOAD_DIR / nome
+        if not caminho.is_file() or caminho.suffix.lower() not in _EXT_AUDIO:
+            raise HTTPException(400, detail=f"música não encontrada: {nome}")
+        caminhos.append(caminho)
+
+    crossfade = max(0.0, min(float(payload.crossfade or 0.0), 10.0))
+    duracoes = [_duracao_audio(c) for c in caminhos]
+    mensuraveis = [d for d in duracoes if d > 0]
+    if mensuraveis and crossfade > 0:
+        # Margem de 0.05s: o acrossfade recusa d >= duração da entrada.
+        crossfade = round(max(0.0, min(crossfade, min(mensuraveis) / 2 - 0.05)), 2)
+
+    usuario = _usuario_atual(request) if request else None
+    dono = f"u{usuario['id']}_" if usuario else "anon_"
+    destino = UPLOAD_DIR / f"{dono}junta_{uuid.uuid4().hex[:12]}_{len(caminhos)}x.mp3"
+
+    normaliza = "aformat=sample_rates=48000:sample_fmts=fltp:channel_layouts=stereo"
+    partes = [f"[{i}:a]{normaliza}[a{i}]" for i in range(len(caminhos))]
+    ultimo = len(caminhos) - 1
+    if crossfade > 0:
+        corrente = "a0"
+        for i in range(1, len(caminhos)):
+            partes.append(
+                f"[{corrente}][a{i}]acrossfade=d={crossfade}:c1=tri:c2=tri[x{i}]"
+            )
+            corrente = f"x{i}"
+    else:
+        # Sem folga pra crossfade: emenda seca (concat), não um arquivo vazio.
+        entradas = "".join(f"[a{i}]" for i in range(len(caminhos)))
+        partes.append(f"{entradas}concat=n={len(caminhos)}:v=0:a=1[x{ultimo}]")
+        corrente = f"x{ultimo}"
+
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-v", "error"]
+    for c in caminhos:
+        cmd += ["-i", str(c)]
+    cmd += [
+        "-filter_complex", ";".join(partes),
+        "-map", f"[{corrente}]",
+        "-c:a", "libmp3lame", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+        str(destino),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0 or not destino.is_file() or destino.stat().st_size == 0:
+        destino.unlink(missing_ok=True)
+        raise HTTPException(
+            500, detail=f"FFmpeg falhou ao juntar as músicas: {(proc.stderr or '')[-300:]}"
+        )
+
+    return {
+        "ok": True,
+        "path": f"uploads/{destino.name}",
+        "url": f"/static/output/uploads/{destino.name}",
+        "absolute": str(destino),
+        "size_bytes": destino.stat().st_size,
+        "duracao": round(_duracao_audio(destino), 2),
+        "faixas": len(caminhos),
+        "crossfade": crossfade,
+        # Soma das faixas menos as sobreposições do crossfade — é a conta que
+        # o usuário espera ver ("2 músicas de 3min com 2s = 5:58", não 6:00).
+        "duracao_bruta": round(sum(duracoes), 2),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Etapa 03 · Trilha pronta do Epidemic Sound (Partner API)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# ⚠️ NOVO (24/09/2026). Por que existe: o Pixabay NÃO serve música pela API
+# (só fotos e vídeos — testado, ver PEDIDOS.md) e o Openverse devolve CC com
+# restrição de derivados/share-alike. O Epidemic Sound é catálogo de música
+# de verdade, com licença própria p/ uso comercial.
+#
+# Regras do parceiro que este código respeita DE PROPÓSITO:
+#   • a chave NUNCA sai do backend — o front fala só com /api/musica/...;
+#   • NADA de cache local de metadados nem de coleções (a Acceptable Use
+#     Policy proíbe) — toda busca vai na API na hora;
+#   • o download usa o link assinado do CDN, que expira sozinho (não guardamos
+#     URL de mídia, só o arquivo baixado, que é o uso previsto).
+
+_ES_BASE = "https://partner-content-api.epidemicsound.com/v0"
+_ES_SORTS = ("Title", "Relevance", "Date", "Popularity", "Duration", "BPM")
+
+
+class EpidemicBaixarPayload(BaseModel):
+    """`qualidade`: normal = 128 kbps · high = 320 kbps (padrão)."""
+    track_id: str
+    titulo: str = "faixa"
+    qualidade: str = "high"
+
+
+def _chave_audio(request: Optional[Request], campo: str, env: str) -> str:
+    """Chave de áudio do USUÁRIO logado (cofre no DB), com o .env de reserva.
+
+    ⚠️ NOVO (24/09/2026): as chaves de trilha/efeitos agora ficam salvas
+    criptografadas por usuário em output/usuarios.db. Se o usuário não colou
+    a dele, vale a do .env (padrão da instalação) — assim nada quebra para
+    quem já tinha configurado o .env.
+    """
+    usuario = _usuario_atual(request) if request is not None else None
+    if usuario:
+        try:
+            por_campo = _AUTH.chaves_audio(usuario["id"])
+            valor = (por_campo.get(campo) or "").strip()
+            if valor:
+                return valor
+        except Exception:  # noqa: BLE001 — cofre indisponível não derruba a busca
+            pass
+    return (os.environ.get(env) or "").strip()
+
+
+def _es_chave(request: Optional[Request] = None) -> str:
+    """Chave da Partner API: a do usuário (DB) ou a do .env — nunca vai ao front."""
+    return _chave_audio(request, "epidemic_api_key", "EPIDEMIC_API_KEY")
+
+
+def _es_get(caminho: str, params: dict[str, Any] | None = None,
+            request: Optional[Request] = None) -> Any:
+    """GET autenticado na Partner API. Erros viram HTTPException explicativa."""
+    chave = _es_chave(request)
+    if not chave:
+        raise HTTPException(
+            503,
+            detail="Chave do Epidemic Sound não configurada — cole a SUA na Etapa 01 "
+                   "(ou defina EPIDEMIC_API_KEY no .env). O upload manual continua funcionando.",
+        )
+    url = f"{_ES_BASE}{caminho}"
+    limpos = {k: v for k, v in (params or {}).items() if v not in (None, "", [])}
+    if limpos:
+        url += "?" + urllib.parse.urlencode(limpos)
+    req = urllib.request.Request(url, headers={
+        "accept": "application/json",
+        "Authorization": f"Bearer {chave}",
+        "User-Agent": "MusicClipStudio/1.0",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as erro:
+        corpo = erro.read().decode("utf-8", "replace")[:200]
+        if erro.code in (401, 403):
+            raise HTTPException(
+                401,
+                detail="Chave do Epidemic Sound recusada — confira a chave da Etapa 01 (ou EPIDEMIC_API_KEY).",
+            ) from erro
+        raise HTTPException(502, detail=f"Epidemic Sound respondeu {erro.code}: {corpo}") from erro
+    except (urllib.error.URLError, TimeoutError, ValueError) as erro:
+        raise HTTPException(502, detail=f"Epidemic Sound inacessível: {erro}") from erro
+
+
+def _es_faixa(t: dict[str, Any]) -> dict[str, Any]:
+    """Normaliza uma faixa do ES pro formato que a UI usa.
+
+    O ES devolve `length` em SEGUNDOS (o metadado é o mesmo usado no
+    `duration` do arquivo baixado) e as capas em vários tamanhos.
+    """
+    imagens = t.get("images") or {}
+    artistas = [a for a in ((t.get("mainArtists") or []) + (t.get("featuredArtists") or [])) if a]
+    return {
+        "id": t.get("id"),
+        "titulo": t.get("title") or "Sem título",
+        "artistas": artistas,
+        "duracao": int(t.get("length") or 0),
+        "bpm": t.get("bpm"),
+        "moods": [m.get("name") for m in (t.get("moods") or []) if isinstance(m, dict) and m.get("name")],
+        "generos": [g.get("name") for g in (t.get("genres") or []) if isinstance(g, dict) and g.get("name")],
+        "capa": imagens.get("M") or imagens.get("default") or "",
+        "com_voz": bool(t.get("hasVocals")),
+    }
+
+
+@app.get("/api/musica/epidemic/buscar", tags=["musica"])
+def epidemic_buscar(
+    request: Request,
+    termo: str = "",
+    limite: int = 20,
+    genero: str = "",
+    humor: str = "",
+    bpm_min: Optional[int] = None,
+    bpm_max: Optional[int] = None,
+    ordem: str = "Relevance",
+) -> dict[str, Any]:
+    """Busca no catálogo do parceiro. Sem cache local — regra do próprio ES."""
+    dados = _es_get("/tracks/search", {
+        "term": termo.strip() or None,
+        # o ES aceita no máximo 60 por página (default 50)
+        "limit": max(1, min(int(limite or 20), 60)),
+        "genre": genero.strip() or None,
+        "mood": humor.strip() or None,
+        "bpmMin": bpm_min,
+        "bpmMax": bpm_max,
+        "sort": ordem if ordem in _ES_SORTS else "Relevance",
+        "order": "asc",
+    }, request=request)
+    faixas = [_es_faixa(t) for t in (dados.get("tracks") or []) if isinstance(t, dict)]
+    return {"ok": True, "total": len(faixas), "faixas": faixas}
+
+
+@app.get("/api/musica/epidemic/filtros", tags=["musica"])
+def epidemic_filtros(request: Request) -> dict[str, Any]:
+    """Gêneros e humores do catálogo, para os selects da Etapa 03."""
+    generos = _es_get("/genres", request=request)
+    humores = _es_get("/moods", request=request)
+
+    def _lista(dados: Any, *chaves: str) -> list[dict[str, Any]]:
+        for chave in chaves:
+            itens = (dados or {}).get(chave)
+            if itens:
+                return [
+                    {"id": i.get("id"), "nome": i.get("name")}
+                    for i in itens
+                    if isinstance(i, dict) and i.get("id")
+                ]
+        return []
+
+    return {
+        "ok": True,
+        "generos": _lista(generos, "genres", "items"),
+        "humores": _lista(humores, "moods", "items"),
+    }
+
+
+@app.post("/api/musica/epidemic/baixar", tags=["musica"])
+def epidemic_baixar(payload: EpidemicBaixarPayload, request: Request = None) -> dict[str, Any]:
+    """Baixa a faixa do CDN do ES e guarda em output/uploads.
+
+    Devolve o MESMO formato de /api/upload/audio, então a faixa entra na
+    Etapa 03 como se o usuário tivesse enviado o arquivo — inclusive podendo
+    ser juntada com as dele pelo crossfade do /api/audio/juntar.
+    """
+    track_id = (payload.track_id or "").strip()
+    if not track_id:
+        raise HTTPException(400, detail="track_id obrigatório")
+    qualidade = payload.qualidade if payload.qualidade in ("normal", "high") else "high"
+
+    info = _es_get(
+        f"/tracks/{urllib.parse.quote(track_id)}/download",
+        {"format": "mp3", "quality": qualidade},
+        request=request,
+    )
+    link = str((info or {}).get("url") or "").strip()
+    if not link:
+        raise HTTPException(502, detail="O Epidemic Sound não devolveu link de download.")
+
+    req = urllib.request.Request(link, headers={"User-Agent": "MusicClipStudio/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            bytes_audio = resp.read()
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as erro:
+        raise HTTPException(502, detail=f"Falha ao baixar do CDN do Epidemic Sound: {erro}") from erro
+    if not bytes_audio:
+        raise HTTPException(502, detail="O CDN devolveu um arquivo vazio.")
+
+    # Nome de arquivo a partir do título: só o que é seguro em disco.
+    titulo = re.sub(r"[^\wÀ-ÿ .-]+", "", payload.titulo or "faixa").strip() or "faixa"
+    usuario = _usuario_atual(request) if request else None
+    dono = f"u{usuario['id']}_" if usuario else "anon_"
+    nome = f"{dono}{uuid.uuid4().hex[:12]}_{titulo[:60]}.mp3"
+    destino = UPLOAD_DIR / nome
+    destino.write_bytes(bytes_audio)
+
+    return {
+        "ok": True,
+        "path": f"uploads/{nome}",
+        "url": f"/static/output/uploads/{nome}",
+        "absolute": str(destino),
+        "size_bytes": len(bytes_audio),
+        "duracao": round(_duracao_audio(destino), 2),
+        "track_id": track_id,
+        "qualidade": qualidade,
+    }
 
 
 @app.post("/api/legenda/transcrever-job", tags=["legenda"])

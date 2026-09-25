@@ -130,6 +130,11 @@ class ClipConfig:
     # dataclasses.replace no request do usuário logado.
     stock_urls: str = ""
 
+    # ⚠️ NOVO (24/09/2026): chave de ÁUDIO (trilha). O .env é apenas o
+    # PADRÃO da instalação — a chave efetiva vem do cofre do usuário logado
+    # (output/usuarios.db, criptografada) e cai para cá quando ele não tem a dele.
+    epidemic_api_key: str = _env_chave("EPIDEMIC_API_KEY")
+
     # ── IA para busca nos bancos (⚠️ NOVO 24/09/2026) ──────────
     # Chave GENÉRICA: Google (AIza…), Groq (gsk_…), OpenRouter
     # (sk-or-…) ou qualquer OpenAI-compatible (sk-…) — o provedor é
