@@ -2915,7 +2915,33 @@ function Step6Gerar() {
   const [etapa, setEtapa] = React.useState("Aguardando início");
   const [done, setDone] = React.useState(false);
   const [falha, setFalha] = React.useState<string | null>(null);
-  const [resultado, setResultado] = React.useState<{ download_url: string; output_path?: string } | null>(null);
+  // ⚠️ NOVO (01/10/2026): type do resultado cresceu — agora o backend devolve
+  // também file_url (/api/jobs/{id}/file — <video> inline) e download_api_url
+  // (/api/jobs/{id}/download — Content-Disposition: attachment, funciona
+  // cross-origin porque o browser respeita o cabeçalho do servidor).
+  const [resultado, setResultado] = React.useState<{
+    download_url: string;
+    output_path?: string;
+    file_url?: string;
+    download_api_url?: string;
+    arquivo_nome?: string;
+  } | null>(null);
+  // pasta onde o MP4 final vai parar (vazio = pasta padrão do MCS)
+  const [outputDir, setOutputDir] = React.useState<string>("");
+  const [sugestoesDir, setSugestoesDir] = React.useState<
+    Array<{ nome: string; caminho: string }>
+  >([]);
+  React.useEffect(() => {
+    let vivo = true;
+    fetch(`${API_BASE}/api/sugerir-pastas`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!vivo || !d?.sugestoes) return;
+        setSugestoesDir(d.sugestoes);
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
   const [logs, setLogs] = React.useState<string[]>([]);
   /* ⚠️ number, não ReturnType<typeof window.setTimeout>: no browser o retorno é
      number, mas o tipo global Timeout do @types/node colide e gerava TS2322. */
@@ -2948,7 +2974,13 @@ function Step6Gerar() {
   const tratarFimDoJob = (job: {
     status?: string;
     error?: string;
-    resultado?: { download_url?: string; output_path?: string };
+    resultado?: {
+      download_url?: string;
+      output_path?: string;
+      file_url?: string;
+      download_api_url?: string;
+      arquivo_nome?: string;
+    };
   }) => {
     if (finalizadoRef.current) return;
 
@@ -2960,7 +2992,13 @@ function Step6Gerar() {
       }
       finalizadoRef.current = true;
       pararPolling();
-      setResultado({ download_url: url, output_path: job.resultado?.output_path });
+      setResultado({
+        download_url: url,
+        output_path: job.resultado?.output_path,
+        file_url: job.resultado?.file_url,
+        download_api_url: job.resultado?.download_api_url,
+        arquivo_nome: job.resultado?.arquivo_nome,
+      });
       setFalha(null);
       setDone(true);
       setPct(100);
@@ -3103,6 +3141,9 @@ function Step6Gerar() {
             // ⚠️ NOVO (22/09/2026): estilo da legenda escolhido na etapa 03.
             legenda_estilo: state.legendaEstilo,
           },
+          // ⚠️ NOVO (01/10/2026): pasta de destino do MP4 escolhido na tela.
+          // Backend grava em CLIPS_DIR e move pra cá no fim do render.
+          output_dir: outputDir || undefined,
           // ⚠️ NOVO (22/09/2026): legendas com os tempos REAIS da transcrição
           // (Whisper da etapa 03). O backend monta o SRT a partir delas —
           // sincronia de verdade com o áudio. Sem transcrição, manda vazio
@@ -3159,6 +3200,57 @@ function Step6Gerar() {
         accent="ok"
       />
 
+      {/* ⚠️ NOVO (01/10/2026): o MP4 não cai mais "em lugar nenhum". O
+          usuário escolhe a pasta ANTES de renderizar — se deixar em branco,
+          vai pra produção padrão do MCS. As chips abaixo são detectadas
+          em runtime pelo backend (/api/sugerir-pastas): Documentos, Downloads,
+          Desktop, Vídeos e volumes montados em /run/media/<user>/. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pasta de destino do arquivo</CardTitle>
+          <CardDescription>
+            Onde o .MP4 final vai parar. Em branco = pasta padrão do MCS
+            (<code className="text-[11px]">output/clipes</code>).
+          </CardDescription>
+        </CardHeader>
+        <div className="flex flex-col gap-2 px-4 pb-4">
+          <input
+            type="text"
+            value={outputDir}
+            onChange={(e) => setOutputDir(e.target.value)}
+            placeholder="/caminho/absoluto/ou/~/Area de Trabalho"
+            className="w-full rounded-md border border-line bg-bg-1 px-3 py-2 text-[13px] font-mono text-fg-0 outline-none focus:border-neon/60"
+            disabled={!!jobId && !done && !falha}
+          />
+          {sugestoesDir.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {sugestoesDir.map((s) => (
+                <button
+                  key={s.caminho}
+                  type="button"
+                  onClick={() => setOutputDir(s.caminho)}
+                  disabled={!!jobId && !done && !falha}
+                  className={
+                    "rounded-full border px-2.5 py-0.5 text-[11px] transition disabled:opacity-40 " +
+                    (outputDir === s.caminho
+                      ? "border-neon bg-neon/15 text-neon"
+                      : "border-line bg-bg-1 text-fg-2 hover:border-neon/40 hover:text-fg-0")
+                  }
+                  title={s.caminho}
+                >
+                  {s.nome}
+                </button>
+              ))}
+            </div>
+          )}
+          {outputDir && (
+            <div className="text-[11px] text-fg-3 font-mono pt-1 truncate">
+              destino: {outputDir}
+            </div>
+          )}
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-4">
         {/* Esquerda — preview de saída + progresso */}
         <Card>
@@ -3201,10 +3293,42 @@ function Step6Gerar() {
                     <div className="text-[13px] text-fg-2">
                       Formato {state.formato} · 30fps · {state.musica.duracao}s
                     </div>
-                    <div className="flex items-center gap-2 pt-2">
+                    <div className="flex items-center gap-2 pt-2 flex-wrap">
+                      {/* ⚠️ CORRIGIDO (01/10/2026): antes o href apontava pra
+                          URL estática (/static/output/clipes/…). Em cross-origin
+                          (Next :3100 → FastAPI :8300) o atributo `download` do
+                          <a> é IGNORADO pelo Chrome/Firefox — o navegador
+                          apenas NAVIA pro MP4, o botão parecia "morto". A rota
+                          nova /api/jobs/{id}/download responde com o header
+                          Content-Disposition: attachment que o browser
+                          respeita mesmo entre origens, e o arquivo salvo
+                          chega com o nome real. */}
                       <Button asChild variant="neon" size="md">
-                        <a href={`${API_BASE}${resultado?.download_url ?? ""}`} download>
+                        <a
+                          href={
+                            jobId
+                              ? `${API_BASE}/api/jobs/${jobId}/download`
+                              : `${API_BASE}${resultado?.download_url ?? ""}`
+                          }
+                          download={resultado?.arquivo_nome || true}
+                        >
                           <Download className="h-4 w-4" /> Baixar .MP4
+                        </a>
+                      </Button>
+                      {/* ⚠️ NOVO (01/10/2026): Assistir abre /api/jobs/{id}/file
+                          (Content-Disposition: inline) em uma aba nova — o
+                          browser toca o MP4 nativamente, sem baixar nada. */}
+                      <Button asChild variant="outline" size="md">
+                        <a
+                          href={
+                            jobId
+                              ? `${API_BASE}/api/jobs/${jobId}/file`
+                              : `${API_BASE}${resultado?.download_url ?? ""}`
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <MonitorPlay className="h-4 w-4" /> Assistir
                         </a>
                       </Button>
                       <Button variant="outline" size="md" onClick={abrirPastaResultado}>

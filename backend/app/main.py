@@ -210,6 +210,10 @@ class GeneratePayload(BaseModel):
     # Música pronta enviada pelo usuário (caminho vindo de /api/upload/audio).
     # É a fonte OFICIAL de trilha: o app não gera música.
     audio_path: Optional[str] = None
+    # ⚠️ NOVO (01/10/2026): pasta onde o MP4 final vai PARAR. Backend renderiza
+    # sempre em CLIPS_DIR (garante que o job funcione) e DEPOIS move para cá,
+    # se vier e for válida. "" / None = deixa onde caiu (padrão).
+    output_dir: Optional[str] = None
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1634,12 +1638,38 @@ def _run_generation_sync(job_id: str, payload: GeneratePayload):
         if not arquivo_saida.is_file() or arquivo_saida.stat().st_size == 0:
             raise RuntimeError("O engine terminou sem produzir um arquivo MP4 válido.")
 
+        # ⚠️ NOVO (01/10/2026): se o usuário escolheu uma pasta de destino,
+        # move o MP4 pra lá. Render continua happening em CLIPS_DIR (o engine
+        # já assume isso), e a gente só reposiciona o arquivo pronto — se o
+        # move falhar (permissão/fora do disco), o clipe continua acessível
+        # no caminho padrão e avisamos no log em vez de quebrar o job.
+        destino_final = arquivo_saida
+        pasta_escolhida = (payload.output_dir or "").strip()
+        if pasta_escolhida:
+            try:
+                pdst = Path(pasta_escolhida).expanduser()
+                pdst.mkdir(parents=True, exist_ok=True)
+                import shutil as _sh
+                novo_caminho = pdst / arquivo_saida.name
+                _sh.move(str(arquivo_saida), str(novo_caminho))
+                destino_final = novo_caminho
+                _evt("progress", {"pct": 98, "etapa": "saída",
+                                  "msg": f"MP4 movido para {novo_caminho}"})
+            except Exception as _e_mv:
+                _evt("progress", {"pct": 98, "etapa": "saída",
+                                  "msg": f"AVISO: não consegui mover para "
+                                         f"'{pasta_escolhida}' ({_e_mv}); "
+                                         f"o arquivo ficou em {arquivo_saida}"})
+
         job["resultado"] = {
-            "output_path": str(arquivo_saida),
+            "output_path": str(destino_final),
             "download_url": f"/static/output/clipes/{arquivo_saida.name}",
+            "file_url": f"/api/jobs/{job_id}/file",
+            "download_api_url": f"/api/jobs/{job_id}/download",
+            "arquivo_nome": destino_final.name,
         }
         job["status"] = "done"
-        _evt("done", {"output": str(saida)})
+        _evt("done", {"output": str(destino_final)})
 
     except Exception as e:
         job["status"] = "error"
@@ -1682,6 +1712,52 @@ def _resultado_do_job(job_id: str) -> Path:
     if not arquivo.is_file():
         raise HTTPException(404, detail="Arquivo não encontrado no disco")
     return arquivo
+
+
+@app.get("/api/jobs/{job_id}/file", tags=["jobs"])
+def servir_resultado_inline(job_id: str):
+    """Serve o MP4 com Content-Disposition: inline — é a URL que o <video>
+    da UI usa pra assistir sem baixar. Diferente do /download, que força
+    attachment. Cross-origin no browser: só o <video> lê, sem download."""
+    arquivo = _resultado_do_job(job_id)
+    return FileResponse(str(arquivo), media_type="video/mp4",
+                        content_disposition_type="inline",
+                        filename=arquivo.name)
+
+
+@app.get("/api/sugerir-pastas", tags=["jobs"])
+def sugerir_pastas() -> dict[str, Any]:
+    """Retorna uma lista de destinos plausíveis pro MP4: HOME, Documentos,
+    Downloads, Área de Trabalho, volumes externos montados e o CLIPS_DIR
+    padrão. A UI mostra como chips clicáveis ao lado do campo de texto."""
+    home = Path.home()
+    candidatos = [
+        ("Documentos", home / "Documents"),
+        ("Documentos", home / "Documentos"),
+        ("Área de Trabalho", home / "Desktop"),
+        ("Área de Trabalho", home / "Área de Trabalho"),
+        ("Downloads", home / "Downloads"),
+        ("Vídeos", home / "Videos"),
+        ("Vídeos", home / "Vídeos"),
+        ("Música", home / "Music"),
+        ("Música", home / "Música"),
+    ]
+    saida = [{"nome": "Pasta padrão do MCS", "caminho": str(CLIPS_DIR)}]
+    vistos = set([str(CLIPS_DIR.resolve())])
+    for rot, p in candidatos:
+        if p.is_dir():
+            rp = str(p.resolve())
+            if rp not in vistos:
+                vistos.add(rp)
+                saida.append({"nome": rot, "caminho": str(p)})
+    # volumes montados em /run/media/<user>/* (padrão Arch/Omarchy)
+    raide = Path("/run/media") / home.name
+    if raide.is_dir():
+        for vol in sorted(raide.iterdir()):
+            if vol.is_dir() and str(vol) not in vistos:
+                vistos.add(str(vol))
+                saida.append({"nome": f"Volume · {vol.name}", "caminho": str(vol)})
+    return {"ok": True, "sugestoes": saida, "home": str(home)}
 
 
 @app.get("/api/jobs/{job_id}/download", tags=["jobs"])
