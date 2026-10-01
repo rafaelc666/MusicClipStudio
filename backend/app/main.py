@@ -1645,6 +1645,7 @@ def _run_generation_sync(job_id: str, payload: GeneratePayload):
         # no caminho padrão e avisamos no log em vez de quebrar o job.
         destino_final = arquivo_saida
         pasta_escolhida = (payload.output_dir or "").strip()
+        print(f"[Render] output_dir recebido: '{pasta_escolhida}' | arquivo em: {arquivo_saida}", flush=True)
         if pasta_escolhida:
             try:
                 pdst = Path(pasta_escolhida).expanduser()
