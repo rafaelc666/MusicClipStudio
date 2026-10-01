@@ -175,7 +175,15 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
         (salvo.musica && salvo.musica.arquivo) ||
         (salvo.midia && salvo.midia.length) ||
         (salvo.imagens && salvo.imagens.length);
-      return tinhaAlgo ? { ...DEFAULT_STATE, ...salvo, completedSteps: salvo.completedSteps ?? {} } : DEFAULT_STATE;
+      if (!tinhaAlgo) return DEFAULT_STATE;
+      // Sanitize: null/undefined must not override DEFAULT_STATE typed fields
+      const merged: StudioProjectState = { ...DEFAULT_STATE, ...salvo, completedSteps: salvo.completedSteps ?? {} };
+      if (typeof merged.letra !== "string") merged.letra = "";
+      if (!Array.isArray(merged.legenda)) merged.legenda = [];
+      if (!Array.isArray(merged.imagens)) merged.imagens = [];
+      if (!Array.isArray(merged.midia)) merged.midia = [];
+      if (!merged.musica || typeof merged.musica !== "object") merged.musica = DEFAULT_STATE.musica;
+      return merged;
     } catch {
       return DEFAULT_STATE;
     }
