@@ -2203,6 +2203,38 @@ function Step5Midia({ onNext }: { onNext: () => void }) {
   const [resultados, setResultados] = React.useState<MidiaStock[]>([]);
   const [buscou, setBuscou] = React.useState(false);
   const [termosUsados, setTermosUsados] = React.useState<string[]>([]);
+  /* Gerar prompts da letra SEM sair desta etapa (botão direto no vazio). */
+  const [gerandoAqui, setGerandoAqui] = React.useState(false);
+  const gerarPromptsAqui = async () => {
+    const letra = (state.letra || "").trim();
+    if (!letra) { toast.error("Nenhuma letra carregada. Volte à etapa 01."); return; }
+    setGerandoAqui(true);
+    const tid = toast.loading("Agente IA · interpretando a letra...");
+    try {
+      const r = await fetch(`${API_BASE}/api/imagens/gerar-prompts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lyrics: letra, description: state.title || "", music_prompt: "", theme: "" }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const json = await r.json();
+      const lista: any[] = Array.isArray(json?.prompts) ? json.prompts : [];
+      if (lista.length === 0) throw new Error("o agente não devolveu nenhum prompt");
+      setState((s) => ({
+        ...s,
+        imagens: lista.map((q: any, i: number) => ({
+          beat: q.beat_id ?? i + 1, prompt: q.prompt, categoria: q.categoria ?? "",
+          confianca: q.confianca ?? 0, checked: true,
+        })),
+      }));
+      toast.success(`${lista.length} cenas geradas`, { id: tid, description: "Os termos já aparecem como chips abaixo." });
+    } catch (e) {
+      toast.error("Falha ao gerar prompts", { id: tid, description: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setGerandoAqui(false);
+    }
+  };
+
 
   /**
    * ⚠️ CORRIGIDO (21/09/2026) — A BUSCA IGNORAVA A LETRA.
@@ -2661,9 +2693,14 @@ function Step5Midia({ onNext }: { onNext: () => void }) {
                   : "Tente “Buscar tudo da letra” de novo ou escreva outro termo (em inglês costuma render mais)."}
               </p>
               {sugestoes.length === 0 && (
-                <Button size="sm" variant="neon" className="mt-4" onClick={() => setStep("imagens")}>
-                  <ArrowLeft className="h-3.5 w-3.5" /> Ir para a etapa 04
-                </Button>
+                <div className="mt-4 flex items-center justify-center gap-3">
+                  <Button size="sm" variant="neon" loading={gerandoAqui} onClick={gerarPromptsAqui}>
+                    <Sparkles className="h-3.5 w-3.5" /> Gerar cenas da letra
+                  </Button>
+                  <button type="button" onClick={() => setStep("imagens")} className="text-[11px] text-fg-3 underline hover:text-fg-1">
+                    ou ir para a etapa 04
+                  </button>
+                </div>
               )}
             </div>
           ) : (
@@ -2929,20 +2966,7 @@ function Step6Gerar() {
   } | null>(null);
   // pasta onde o MP4 final vai parar (vazio = pasta padrão do MCS)
   const [outputDir, setOutputDir] = React.useState<string>("");
-  const [sugestoesDir, setSugestoesDir] = React.useState<
-    Array<{ nome: string; caminho: string }>
-  >([]);
-  React.useEffect(() => {
-    let vivo = true;
-    fetch(`${API_BASE}/api/sugerir-pastas`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!vivo || !d?.sugestoes) return;
-        setSugestoesDir(d.sugestoes);
-      })
-      .catch(() => {});
-    return () => { vivo = false; };
-  }, []);
+  const [escolhendo, setEscolhendo] = React.useState(false);
   const [logs, setLogs] = React.useState<string[]>([]);
   /* ⚠️ number, não ReturnType<typeof window.setTimeout>: no browser o retorno é
      number, mas o tipo global Timeout do @types/node colide e gerava TS2322. */
@@ -3201,53 +3225,43 @@ function Step6Gerar() {
         accent="ok"
       />
 
-      {/* ⚠️ NOVO (01/10/2026): o MP4 não cai mais "em lugar nenhum". O
-          usuário escolhe a pasta ANTES de renderizar — se deixar em branco,
-          vai pra produção padrão do MCS. As chips abaixo são detectadas
-          em runtime pelo backend (/api/sugerir-pastas): Documentos, Downloads,
-          Desktop, Vídeos e volumes montados em /run/media/<user>/. */}
+      {/* Pasta de destino: botao "Escolher pasta" abre dialog nativo (tkinter). */}
       <Card>
         <CardHeader>
           <CardTitle>Pasta de destino do arquivo</CardTitle>
           <CardDescription>
-            Onde o .MP4 final vai parar. Em branco = pasta padrão do MCS
-            (<code className="text-[11px]">output/clipes</code>).
+            Onde o .MP4 final vai parar. Sem seleção = pasta padrão do MCS.
           </CardDescription>
         </CardHeader>
-        <div className="flex flex-col gap-2 px-4 pb-4">
-          <input
-            type="text"
-            value={outputDir}
-            onChange={(e) => setOutputDir(e.target.value)}
-            placeholder="/caminho/absoluto/ou/~/Area de Trabalho"
-            className="w-full rounded-md border border-line bg-bg-1 px-3 py-2 text-[13px] font-mono text-fg-0 outline-none focus:border-neon/60"
+        <div className="flex items-center gap-3 px-4 pb-4">
+          <Button
+            size="sm"
+            variant="outline"
+            loading={escolhendo}
             disabled={!!jobId && !done && !falha}
-          />
-          {sugestoesDir.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {sugestoesDir.map((s) => (
-                <button
-                  key={s.caminho}
-                  type="button"
-                  onClick={() => setOutputDir(s.caminho)}
-                  disabled={!!jobId && !done && !falha}
-                  className={
-                    "rounded-full border px-2.5 py-0.5 text-[11px] transition disabled:opacity-40 " +
-                    (outputDir === s.caminho
-                      ? "border-neon bg-neon/15 text-neon"
-                      : "border-line bg-bg-1 text-fg-2 hover:border-neon/40 hover:text-fg-0")
-                  }
-                  title={s.caminho}
-                >
-                  {s.nome}
-                </button>
-              ))}
-            </div>
+            onClick={async () => {
+              setEscolhendo(true);
+              try {
+                const r = await fetch(`${API_BASE}/api/escolher-pasta`);
+                const d = await r.json();
+                if (d.ok && d.caminho) setOutputDir(d.caminho);
+              } catch { toast.error("Falha ao abrir o seletor de pasta"); }
+              finally { setEscolhendo(false); }
+            }}
+          >
+            <FolderOpen className="h-3.5 w-3.5" /> Escolher pasta…
+          </Button>
+          {outputDir ? (
+            <span className="text-[12px] font-mono text-fg-1 truncate max-w-[360px]" title={outputDir}>
+              {outputDir}
+            </span>
+          ) : (
+            <span className="text-[12px] text-fg-3">padrão MCS (output/clipes)</span>
           )}
           {outputDir && (
-            <div className="text-[11px] text-fg-3 font-mono pt-1 truncate">
-              destino: {outputDir}
-            </div>
+            <button type="button" onClick={() => setOutputDir("")} className="text-[11px] text-fg-3 underline hover:text-fg-1 ml-2">
+              limpar
+            </button>
           )}
         </div>
       </Card>

@@ -1762,6 +1762,34 @@ def sugerir_pastas() -> dict[str, Any]:
     return {"ok": True, "sugestoes": saida, "home": str(home)}
 
 
+@app.get("/api/escolher-pasta", tags=["jobs"])
+def escolher_pasta_dialogo() -> dict[str, Any]:
+    """Abre um diálogo nativo de seleção de pasta (tkinter) e retorna o caminho."""
+    import subprocess, os as _os
+    script = (
+        "import tkinter as tk; from tkinter import filedialog; "
+        "r = tk.Tk(); r.withdraw(); r.attributes('-topmost', True); "
+        "p = filedialog.askdirectory(title='Escolha a pasta de destino'); "
+        "r.destroy(); print(p or '')"
+    )
+    env = dict(_os.environ)
+    env["DISPLAY"] = env.get("DISPLAY") or ":0"
+    env.setdefault("XAUTHORITY", _os.path.expanduser("~/.Xauthority"))
+    try:
+        proc = subprocess.run(
+            ["python3", "-c", script],
+            capture_output=True, text=True, timeout=60, env=env,
+        )
+        caminho = proc.stdout.strip()
+        if caminho and _os.path.isdir(caminho):
+            return {"ok": True, "caminho": caminho}
+        return {"ok": False, "caminho": "", "motivo": "nenhuma pasta selecionada"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "caminho": "", "motivo": "timeout (60s)"}
+    except Exception as e:
+        return {"ok": False, "caminho": "", "motivo": str(e)}
+
+
 @app.get("/api/jobs/{job_id}/download", tags=["jobs"])
 def baixar_resultado(job_id: str):
     """Baixa o MP4 final com Content-Disposition: attachment (força o save,
