@@ -501,7 +501,7 @@ Dica: você também pode carregar um arquivo .txt ou transcrever do áudio na pr
               {state.letra && (
                 <button
                   type="button"
-                  onClick={() => setState((s) => ({ ...s, letra: "" }))}
+                  onClick={() => { setResult(null); setState((s) => ({ ...s, letra: "" })); }}
                   className="text-[11px] text-fg-3 underline hover:text-err transition-colors"
                 >
                   limpar letra
