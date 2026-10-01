@@ -402,9 +402,12 @@ def auth_registrar(payload: AuthPayload, response: Response) -> dict[str, Any]:
 
 @app.post("/api/auth/login", tags=["auth"])
 def auth_login(payload: AuthPayload, response: Response) -> dict[str, Any]:
-    usuario = _AUTH.autenticar(payload.username.strip(), payload.password)
-    if not usuario:
-        raise HTTPException(401, detail="Usuário ou senha incorretos")
+    try:
+        usuario = _AUTH.autenticar(payload.username.strip(), payload.password)
+    except ValueError as e:
+        msg = str(e)
+        code = 429 if "Muitas tentativas" in msg else 401
+        raise HTTPException(code, detail=msg)
     sessao = _AUTH.criar_sessao(usuario["id"])
     _definir_cookie(response, sessao["token"])
     return {"ok": True, "usuario": {"id": usuario["id"], "username": usuario["username"]}}
