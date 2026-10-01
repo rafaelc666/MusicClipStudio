@@ -94,7 +94,8 @@ export default function NewStudioWizardPage() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.28, ease: [.2,.7,.2,1] }}
             >
-              {activeKey === "chaves"  && <Step0Chaves onNext={onNext} />}
+              {/* ⚠️ REMOVIDO (01/10/2026): step "chaves" — as chaves agora
+                  ficam só no diálogo "Chaves de API" do topo. */}
               {activeKey === "letra"   && <Step1Letra onNext={onNext} />}
               {activeKey === "audio"   && <Step3Audio />}
               {activeKey === "legenda" && <Step2Legenda onNext={onNext} />}
@@ -423,7 +424,7 @@ function AvisoStatusChaves() {
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 rounded-sm border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
-      ⚠ sem chaves — volte ao <b className="mx-0.5">passo 1</b> e configure
+      ⚠ sem chaves — abra <b className="mx-0.5">Chaves de API</b> no topo
     </span>
   );
 }

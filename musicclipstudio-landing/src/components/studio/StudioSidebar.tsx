@@ -14,13 +14,11 @@ import {
   LayoutDashboard,
   Sparkles,
   ChevronRight,
-  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type StudioStepKey =
   | "dashboard"
-  | "chaves"
   | "letra"
   | "audio"
   | "legenda"
@@ -56,13 +54,16 @@ export const STUDIO_STEPS: Array<{
    * de banco de mídia a etapa de busca não encontra nada. A etapa 01
    * explica onde criar cada chave e abre o site oficial de cada banco.
    */
-  { key: "chaves",  label: "Chave API", numero: "01", icon: KeyRound, desc: "Bancos de mídia" },
-  { key: "letra",   label: "Letra",    numero: "02", icon: FileText, desc: "Texto da música" },
-  { key: "audio",   label: "Áudio",    numero: "03", icon: Music,    desc: "Trilha sonora" },
-  { key: "legenda", label: "Legenda",  numero: "04", icon: Captions, desc: "Transcrição & tempos" },
-  { key: "imagens", label: "Imagens",  numero: "05", icon: ImageIcon, desc: "Prompts IA" },
-  { key: "midia",   label: "Mídia",    numero: "06", icon: FolderOpen, desc: "Seleção de mídia" },
-  { key: "gerar",   label: "Gerar",    numero: "07", icon: Rocket,   desc: "Render final" },
+  // ⚠️ REMOVIDO (01/10/2026): "chaves" como etapa do wizard. As chaves de API
+  // agora vivem EXCLUSIVAMENTE no diálogo "Chaves de API" do topo — antes
+  // havia dois lugares com conteúdo diferente (step 01 mostrava só 7 bancos,
+  // o diálogo mostrava tudo). Wizard limpo: 6 etapas, um botão de navegação.
+  { key: "letra",   label: "Letra",    numero: "01", icon: FileText,   desc: "Texto da música" },
+  { key: "audio",   label: "Áudio",    numero: "02", icon: Music,      desc: "Trilha sonora" },
+  { key: "legenda", label: "Legenda",  numero: "03", icon: Captions,   desc: "Transcrição & tempos" },
+  { key: "imagens", label: "Imagens",  numero: "04", icon: ImageIcon,  desc: "Prompts IA" },
+  { key: "midia",   label: "Mídia",    numero: "05", icon: FolderOpen, desc: "Seleção de mídia" },
+  { key: "gerar",   label: "Gerar",    numero: "06", icon: Rocket,     desc: "Render final" },
 ];
 
 interface Props {
