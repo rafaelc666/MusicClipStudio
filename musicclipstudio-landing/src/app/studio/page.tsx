@@ -104,7 +104,7 @@ export default function StudioDashboardPage() {
     () => [
       { label: "Projetos", value: String(projetos.length), icon: STAT_ICONS[0], accent: "neon" },
       { label: "Minutos renderizados", value: "—", icon: STAT_ICONS[1], accent: "ok" },
-      { label: "Cliipes publicados", value: "—", icon: STAT_ICONS[2], accent: "violet" },
+      { label: "Clipes publicados", value: "—", icon: STAT_ICONS[2], accent: "violet" },
       { label: "Tempo médio", value: "—", icon: STAT_ICONS[3], accent: "warn" },
     ],
     [projetos.length],

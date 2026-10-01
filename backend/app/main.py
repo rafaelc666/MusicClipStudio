@@ -1614,7 +1614,12 @@ def _run_generation_sync(job_id: str, payload: GeneratePayload):
             if not u:
                 continue
             if _eh_arquivo_midia(u):
-                finais.append(u)
+                # Resolve /static/output/... URLs to actual filesystem paths
+                if u.startswith("/static/output/"):
+                    real = str(OUTPUT_DIR / u.removeprefix("/static/output/"))
+                    finais.append(real)
+                else:
+                    finais.append(u)
                 continue
             if u.startswith(("http://", "https://")):
                 try:
