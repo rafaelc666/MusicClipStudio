@@ -18,6 +18,7 @@ export interface ProjetoSalvo {
   status?: string;
   letra?: string;
   legenda?: unknown[];
+  legendaEditada?: boolean;
   legendaEstilo?: {
     cor: string; corContorno: string; fonte: string; tamanho: number;
     contorno: number; posicao: "baixo" | "centro" | "topo"; negrito: boolean;

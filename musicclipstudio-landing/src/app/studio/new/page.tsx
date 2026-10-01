@@ -519,7 +519,12 @@ Dica: você também pode carregar um arquivo .txt ou transcrever do áudio na pr
           <div className="relative">
             <Textarea
               value={state.letra}
-              onChange={(e) => setState((s) => ({ ...s, letra: e.target.value }))}
+              onChange={(e) => setState((s) => ({
+                ...s,
+                letra: e.target.value,
+                // Se a legenda não foi editada/transcrita, regenera da letra nova.
+                ...(!(s as any).legendaEditada && s.legenda.length > 0 ? { legenda: [] } : {}),
+              }))}
               placeholder={PLACEHOLDER}
               className="min-h-[280px] leading-[1.75] font-sans"
             />
@@ -702,11 +707,12 @@ function Step2Legenda({ onNext }: { onNext: () => void }) {
       setState((s) => ({
         ...s,
         legenda: novas,
+        legendaEditada: true,
         // Sem letra digitada, a transcrição É a letra.
         letra: (s.letra || "").trim()
           ? s.letra
           : String(json.texto_completo || novas.map((n) => n.texto).join("\n")),
-      }));
+      } as any));
 
       toast.success("Transcrição concluída", {
         id,
@@ -768,7 +774,7 @@ function Step2Legenda({ onNext }: { onNext: () => void }) {
                     if (limpo !== original) mudadas += 1;
                     return { ...l, texto: limpo };
                   });
-                  setState((s) => ({ ...s, legenda: novas }));
+                  setState((s) => ({ ...s, legenda: novas, legendaEditada: true } as any));
                   toast.success("Ortografia revisada", {
                     description: mudadas > 0 ? `${mudadas} de ${linhas.length} linhas ajustadas` : "Nenhum erro comum encontrado",
                   });
@@ -858,7 +864,7 @@ function Step2Legenda({ onNext }: { onNext: () => void }) {
                     onBlur={(e) => {
                       const novo = [...linhas];
                       novo[i] = { ...(novo[i] || {}), texto: e.target.value };
-                      setState((s) => ({ ...s, legenda: novo }));
+                      setState((s) => ({ ...s, legenda: novo, legendaEditada: true } as any));
                     }}
                   />
                   <div className="text-right text-[11px] font-mono text-fg-3 group-hover:text-fg-1 transition-colors">
@@ -886,7 +892,7 @@ function Step2Legenda({ onNext }: { onNext: () => void }) {
                             : {}),
                         };
                         const novo = [...linhas.slice(0, i + 1), nova, ...linhas.slice(i + 1)];
-                        setState((s) => ({ ...s, legenda: novo }));
+                        setState((s) => ({ ...s, legenda: novo, legendaEditada: true } as any));
                       }}
                       className="h-6 w-6 rounded-sm text-fg-3 opacity-0 transition-opacity hover:bg-bg-3 hover:text-fg-0 group-hover:opacity-100"
                     >
@@ -896,7 +902,7 @@ function Step2Legenda({ onNext }: { onNext: () => void }) {
                       type="button"
                       title="remover esta linha"
                       onClick={() => {
-                        setState((s) => ({ ...s, legenda: linhas.filter((_, k) => k !== i) }));
+                        setState((s) => ({ ...s, legenda: linhas.filter((_, k) => k !== i), legendaEditada: true } as any));
                       }}
                       className="h-6 w-6 rounded-sm text-err/70 opacity-0 transition-opacity hover:bg-err/15 hover:text-err group-hover:opacity-100"
                     >

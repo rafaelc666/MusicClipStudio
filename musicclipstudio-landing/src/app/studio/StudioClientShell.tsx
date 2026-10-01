@@ -59,6 +59,7 @@ export interface StudioProjectState {
   createdAt: number;
   letra: string;
   legenda: any[];
+  legendaEditada?: boolean;
   /** ⚠️ NOVO (22/09/2026) — estilo da legenda queimada (cor, fonte,
    * tamanho, contorno, posição). Vira force_style do FFmpeg. */
   legendaEstilo?: EstiloLegenda;
@@ -123,6 +124,7 @@ const DEFAULT_STATE: StudioProjectState = {
   createdAt: Date.now(),
   letra: "",
   legenda: [],
+  legendaEditada: false,
   legendaEstilo: ESTILO_PADRAO_LEGENDA,
   musica: { duracao: 0 },
   faixasAudio: [],
@@ -216,6 +218,7 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
         createdAt: state.createdAt,
         letra: state.letra,
         legenda: state.legenda,
+        legendaEditada: state.legendaEditada,
         legendaEstilo: state.legendaEstilo,
         musica: state.musica,
         imagens: state.imagens,
