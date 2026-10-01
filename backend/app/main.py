@@ -1696,6 +1696,47 @@ def iniciar_geracao(payload: GeneratePayload) -> dict[str, Any]:
     return {"ok": True, "job_id": job_id}
 
 
+@app.get("/api/jobs", tags=["jobs"])
+def listar_jobs() -> list[dict[str, Any]]:
+    """Lista todos os jobs de render concluídos + arquivos órfãos no disco."""
+    saida: list[dict[str, Any]] = []
+    vistos: set[str] = set()
+    # 1. Jobs em memória (status done)
+    for jid, j in _jobs.items():
+        if j.get("status") != "done":
+            continue
+        res = j.get("resultado") or {}
+        entry = {
+            "id": jid,
+            "status": "done",
+            "created_at": j.get("created_at"),
+            "arquivo_nome": res.get("arquivo_nome", ""),
+            "output_path": res.get("output_path", ""),
+            "download_api_url": res.get("download_api_url", f"/api/jobs/{jid}/download"),
+            "file_url": res.get("file_url", f"/api/jobs/{jid}/file"),
+        }
+        saida.append(entry)
+        if res.get("output_path"):
+            vistos.add(str(Path(res["output_path"]).name))
+    # 2. Arquivos .mp4 em CLIPS_DIR sem job correspondente (backend reiniciou)
+    try:
+        for f in sorted(CLIPS_DIR.glob("*.mp4"), key=lambda x: x.stat().st_mtime, reverse=True):
+            if f.name not in vistos:
+                saida.append({
+                    "id": f.name.replace("_legendado.mp4", ""),
+                    "status": "done_orphan",
+                    "created_at": f.stat().st_mtime,
+                    "arquivo_nome": f.name,
+                    "output_path": str(f),
+                    "download_api_url": "",
+                    "file_url": "",
+                })
+    except OSError:
+        pass
+    saida.sort(key=lambda x: x.get("created_at") or 0, reverse=True)
+    return saida
+
+
 @app.get("/api/jobs/{job_id}", tags=["jobs"])
 def get_job(job_id: str) -> dict[str, Any]:
     if job_id not in _jobs:
