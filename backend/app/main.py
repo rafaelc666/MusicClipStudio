@@ -1728,8 +1728,8 @@ def listar_jobs() -> list[dict[str, Any]]:
                     "created_at": f.stat().st_mtime,
                     "arquivo_nome": f.name,
                     "output_path": str(f),
-                    "download_api_url": "",
-                    "file_url": "",
+                    "download_api_url": f"/api/clipes/{f.name}?download=true",
+                    "file_url": f"/api/clipes/{f.name}",
                 })
     except OSError:
         pass
@@ -1765,6 +1765,21 @@ def servir_resultado_inline(job_id: str):
     return FileResponse(str(arquivo), media_type="video/mp4",
                         content_disposition_type="inline",
                         filename=arquivo.name)
+
+
+@app.get("/api/clipes/{arquivo}", tags=["jobs"])
+def servir_clipe(arquivo: str, download: bool = False) -> FileResponse:
+    """Serve um .mp4 direto da CLIPS_DIR (útil p/ órfãos sem job em memória)."""
+    # segurança: só arquivos .mp4 sem path traversal
+    if "/" in arquivo or ".." in arquivo or not arquivo.endswith(".mp4"):
+        raise HTTPException(400, detail="Nome inválido")
+    caminho = CLIPS_DIR / arquivo
+    if not caminho.is_file():
+        raise HTTPException(404, detail="Arquivo não encontrado")
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{arquivo}"'
+    return FileResponse(str(caminho), media_type="video/mp4", headers=headers)
 
 
 @app.get("/api/sugerir-pastas", tags=["jobs"])
