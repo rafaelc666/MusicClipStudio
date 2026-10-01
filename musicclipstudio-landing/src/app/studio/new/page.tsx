@@ -2857,7 +2857,44 @@ function Step5Midia({ onNext }: { onNext: () => void }) {
               >
                 Limpar
               </Button>
-              <Button size="sm" variant="outline"><Upload className="h-3.5 w-3.5" /> Upload manual</Button>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-sm border border-white/10 bg-bg-3 px-3 py-1.5 text-[12px] text-fg-1 hover:border-neon/30 transition-colors">
+                <Upload className="h-3.5 w-3.5" /> Upload manual
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = e.target.files;
+                    if (!files || !files.length) return;
+                    for (const file of Array.from(files)) {
+                      const fd = new FormData();
+                      fd.append("file", file);
+                      try {
+                        const r = await fetch(`${API_BASE}/api/upload/imagem`, { method: "POST", body: fd });
+                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                        const d = await r.json();
+                        setState((s) => ({
+                          ...s,
+                          midia: [...s.midia, {
+                            i: s.midia.length,
+                            url: d.url,
+                            thumb: d.url,
+                            tipo: file.type.startsWith("video") ? "VIDEO" : "FOTO",
+                            provider: "local",
+                            titulo: d.nome || file.name,
+                            origem: "upload",
+                            efeito: "ken_burns",
+                          }],
+                        }));
+                      } catch (err: any) {
+                        toast.error("Falha no upload", { description: err.message });
+                      }
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </label>
             </div>
           </div>
         </CardContent>

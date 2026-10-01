@@ -770,6 +770,25 @@ def listar_uploads_recentes(request: Request, limite: int = 8) -> dict[str, Any]
 
 
 # ═══════════════════════════════════════════════════════════════════════
+@app.post("/api/upload/imagem", tags=["upload"])
+async def upload_imagem(file: UploadFile = File(...), request: Request = None) -> dict[str, Any]:
+    """Recebe uma imagem/vídeo local do usuário para usar como cena no clipe."""
+    usuario = _usuario_atual(request) if request else None
+    dono = f"u{usuario['id']}_" if usuario else "anon_"
+    nome = f"{dono}{uuid.uuid4().hex}_{file.filename or 'imagem.png'}"
+    destino = UPLOAD_DIR / nome
+    conteudo = await file.read()
+    destino.write_bytes(conteudo)
+    rel = f"uploads/{nome}"
+    return {
+        "ok": True,
+        "path": rel,
+        "url": f"/static/output/{rel}",
+        "nome": file.filename or nome,
+        "size_bytes": len(conteudo),
+    }
+
+
 # Etapa 03 · Várias músicas numa faixa só (crossfade)
 # ═══════════════════════════════════════════════════════════════════════
 
