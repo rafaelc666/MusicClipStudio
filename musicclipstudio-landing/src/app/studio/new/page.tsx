@@ -519,12 +519,7 @@ Dica: você também pode carregar um arquivo .txt ou transcrever do áudio na pr
           <div className="relative">
             <Textarea
               value={state.letra}
-              onChange={(e) => setState((s) => ({
-                ...s,
-                letra: e.target.value,
-                // Se a legenda não foi editada/transcrita, regenera da letra nova.
-                ...(!(s as any).legendaEditada && s.legenda.length > 0 ? { legenda: [] } : {}),
-              }))}
+              onChange={(e) => setState((s) => ({ ...s, letra: e.target.value }))}
               placeholder={PLACEHOLDER}
               className="min-h-[280px] leading-[1.75] font-sans"
             />
@@ -824,6 +819,29 @@ function Step2Legenda({ onNext }: { onNext: () => void }) {
         </CardHeader>
 
         <CardContent>
+          {/* Indicador de fonte de verdade */}
+          <div className="mb-3 flex items-center justify-between">
+            <div className={
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium " +
+              (state.legenda.length > 0
+                ? "bg-ok/10 text-ok border border-ok/20"
+                : "bg-warn/10 text-warn border border-warn/20")
+            }>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {state.legenda.length > 0
+                ? "Legenda editada nesta etapa (soberana no render)"
+                : "Sem edição aqui — render usará a letra da etapa 01"}
+            </div>
+            {state.legenda.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setState((s) => ({ ...s, legenda: [], legendaEditada: false } as any))}
+                className="text-[11px] text-fg-3 underline hover:text-err transition-colors"
+              >
+                limpar legenda
+              </button>
+            )}
+          </div>
           <div className="overflow-hidden rounded-sm border border-white/5 bg-bg-0/40">
             <div className="grid grid-cols-[76px_1fr_64px_72px] gap-2 border-b border-white/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-fg-3">
               <span>Tempo</span>
@@ -3414,7 +3432,7 @@ function Step6Gerar() {
           </CardHeader>
           <CardContent className="space-y-4">
             <SummaryRow k="Letra" v={state.letra ? `${state.letra.split(/\s+/).filter(Boolean).length} palavras` : "—"} />
-            <SummaryRow k="Legenda" v={state.legenda.length > 0 ? `${state.legenda.length} linhas` : "Automática da letra"} />
+            <SummaryRow k="Legenda" v={state.legenda.length > 0 ? `${state.legenda.length} linhas (etapa 03 · soberana)` : "Usará letra da etapa 01"} />
             <SummaryRow
               k="Música"
               v={
