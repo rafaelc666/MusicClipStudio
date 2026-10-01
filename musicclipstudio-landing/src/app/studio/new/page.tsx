@@ -498,6 +498,15 @@ Dica: você também pode carregar um arquivo .txt ou transcrever do áudio na pr
               <CardTitle>Texto da música</CardTitle>
               <CardDescription>Quanto mais estruturada (estrofes/versos), melhor a sincronia.</CardDescription>
             </div>
+              {state.letra && (
+                <button
+                  type="button"
+                  onClick={() => setState((s) => ({ ...s, letra: "" }))}
+                  className="text-[11px] text-fg-3 underline hover:text-err transition-colors"
+                >
+                  limpar letra
+                </button>
+              )}
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline">
                 <Upload className="h-3.5 w-3.5" /> Carregar .txt
