@@ -1744,11 +1744,13 @@ def sugerir_pastas() -> dict[str, Any]:
     ]
     saida = [{"nome": "Pasta padrão do MCS", "caminho": str(CLIPS_DIR)}]
     vistos = set([str(CLIPS_DIR.resolve())])
+    nomes_vistos = set(["Pasta padrão do MCS"])
     for rot, p in candidatos:
-        if p.is_dir():
+        if p.is_dir() and rot not in nomes_vistos:
             rp = str(p.resolve())
             if rp not in vistos:
                 vistos.add(rp)
+                nomes_vistos.add(rot)
                 saida.append({"nome": rot, "caminho": str(p)})
     # volumes montados em /run/media/<user>/* (padrão Arch/Omarchy)
     raide = Path("/run/media") / home.name
