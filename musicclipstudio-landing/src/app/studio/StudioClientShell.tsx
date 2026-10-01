@@ -12,7 +12,7 @@ import { LoginGate } from "@/components/studio/LoginGate";
 import { ProvedoresDialog } from "@/components/studio/ProvedoresDialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { salvarProjeto } from "@/lib/projetos-api";
+import { salvarProjeto, obterProjeto } from "@/lib/projetos-api";
 
 /**
  * Contexto simples para os passos do wizard compartilharem estado do projeto
@@ -185,6 +185,40 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<StudioProjectState>(initialState);
   const [salvando, setSalvando] = React.useState(false);
   const primeiraCarga = React.useRef(true);
+
+  // ── Carrega projeto salvo via ?projeto=<id> (link do dashboard) ──
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const projetoId = params.get("projeto");
+    if (!projetoId) return;
+    void (async () => {
+      const proj = await obterProjeto(projetoId);
+      if (proj) {
+        setState((s) => ({
+          ...s,
+          id: proj.id,
+          title: proj.title || s.title,
+          createdAt: proj.createdAt || s.createdAt,
+          letra: proj.letra ?? s.letra,
+          legenda: (proj.legenda as any[]) ?? s.legenda,
+          legendaEditada: proj.legendaEditada ?? false,
+          legendaEstilo: proj.legendaEstilo ?? s.legendaEstilo,
+          musica: (proj.musica as any) ?? s.musica,
+          imagens: (proj.imagens as any[]) ?? s.imagens,
+          midia: (proj.midia as any[]) ?? s.midia,
+          formato: (proj.formato as any) ?? s.formato,
+          completedSteps: proj.completedSteps ?? s.completedSteps,
+          activeStep: (proj.activeStep as StudioStepKey) ?? s.activeStep,
+        }));
+        // Remove ?projeto= da URL para não recarregar em navegação interna
+        params.delete("projeto");
+        const qs = params.toString();
+        const url = window.location.pathname + (qs ? "?" + qs : "");
+        window.history.replaceState(null, "", url);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Salva no localStorage em cada mudança de estado (lightweight: ~ a cada
   // 300ms no máximo para não spammar enquanto digita letra/transcreve).
