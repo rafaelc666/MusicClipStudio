@@ -5,12 +5,12 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Plus, Play, Clock, Film, Sparkles, ArrowUpRight,
-  FileText, Music, FolderOpen, Rocket, Trash2, Loader2,
+  FileText, Music, FolderOpen, Rocket, Trash2, Loader2, Download, MonitorPlay,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, API_BASE } from "@/lib/utils";
 import {
   listarProjetos, apagarProjeto,
   type ProjetoSalvo,
@@ -69,6 +69,7 @@ export default function StudioDashboardPage() {
   const [projetos, setProjetos] = React.useState<ProjetoCard[]>([]);
   const [carregando, setCarregando] = React.useState(true);
   const [offline, setOffline] = React.useState(false);
+  const [clipes, setClipes] = React.useState<any[]>([]);
 
   // Carrega os projetos salvos (SQLite local via /api/projetos)
   const carregar = React.useCallback(async () => {
@@ -81,6 +82,11 @@ export default function StudioDashboardPage() {
       setOffline(false);
       setProjetos(brutos.map(paraCard));
     }
+    // Clipes renderizados
+    try {
+      const r = await fetch(`${API_BASE}/api/jobs`);
+      if (r.ok) setClipes(await r.json());
+    } catch { /* offline */ }
     setCarregando(false);
   }, []);
 
@@ -340,6 +346,65 @@ export default function StudioDashboardPage() {
           })}
         </div>
       </section>
+
+      {/* ─── Clipes renderizados ──────────────────────────────────── */}
+      {clipes.length > 0 && (
+        <section className="mt-12">
+          <div className="flex items-end justify-between mb-4">
+            <div>
+              <span className="eyebrow">Renderizados</span>
+              <h2 className="display-lg mt-1">Meus clipes</h2>
+              <p className="text-[13px] text-fg-2">Arquivos .MP4 prontos para uso.</p>
+            </div>
+            <div className="chip">
+              <Film className="h-3.5 w-3.5" /> {clipes.length} clipe{clipes.length === 1 ? "" : "s"}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {clipes.map((c, idx) => (
+              <motion.div
+                key={c.id + idx}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05, duration: 0.3 }}
+              >
+                <Card className="overflow-hidden group">
+                  <CardContent className="!p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neon/10 text-neon shrink-0">
+                        <Play className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-medium text-fg-0">{c.arquivo_nome || c.id}</p>
+                        <p className="text-[11px] text-fg-3">{c.output_path || "—"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      {c.file_url && (
+                        <a href={`${API_BASE}${c.file_url}`} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-[11px]">
+                            <MonitorPlay className="h-3 w-3" /> Assistir
+                          </Button>
+                        </a>
+                      )}
+                      {c.download_api_url && (
+                        <a href={`${API_BASE}${c.download_api_url}`} download={c.arquivo_nome}>
+                          <Button size="sm" variant="neon" className="gap-1.5 h-7 text-[11px]">
+                            <Download className="h-3 w-3" /> Baixar
+                          </Button>
+                        </a>
+                      )}
+                      <span className="ml-auto text-[10px] text-fg-3 font-mono">
+                        {c.created_at ? relativeTime(c.created_at * 1000) : ""}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
