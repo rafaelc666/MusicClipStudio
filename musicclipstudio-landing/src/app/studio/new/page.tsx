@@ -328,8 +328,8 @@ function Step0Chaves({ onNext }: { onNext: () => void }) {
         </div>
         <p className="mt-1 text-[12px] leading-relaxed text-fg-2">
           As chaves acima são de <b>foto e vídeo</b>. Esta é de <b>áudio</b> e entra
-          na <b>etapa 03</b> — a faixa baixada aqui vira uma música da sequência, do mesmo
-          jeito que um arquivo que você enviasse. São opcionais: sem elas, a etapa 03
+          na <b>etapa 02</b> — a faixa baixada aqui vira uma música da sequência, do mesmo
+          jeito que um arquivo que você enviasse. São opcionais: sem elas, a etapa 02
           continua funcionando com upload manual. Guarde-as no botão <b>colar chave</b>:
           ficam <b>salvas na sua conta</b>, criptografadas, como as dos bancos de mídia.
         </p>
@@ -1712,7 +1712,7 @@ function Step3Audio() {
             </div>
 
             <p className="mt-3.5 text-[10.5px] uppercase tracking-wide text-fg-3">
-              Com chave de API · cadastre na etapa 01
+              Com chave de API · cadastre no menu Chaves de API
             </p>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {[
@@ -3005,6 +3005,7 @@ function Step6Gerar() {
      number, mas o tipo global Timeout do @types/node colide e gerava TS2322. */
   const pollingRef = React.useRef<number | null>(null);
   const finalizadoRef = React.useRef(false);
+  const wsRef = React.useRef<WebSocket | null>(null);
   const tentativasPollingRef = React.useRef(0);
 
   React.useEffect(() => () => {
@@ -3124,6 +3125,8 @@ function Step6Gerar() {
       ? API_BASE.replace(/^https?:\/\//, "").replace(/\/$/, "")
       : "127.0.0.1:8300";
     const ws = new WebSocket(`${proto}://${hostApi}/ws/jobs/${id}`);
+    wsRef.current = ws;
+    ws.onclose = () => { wsRef.current = null; };
 
     ws.onmessage = (ev) => {
       try {
@@ -3409,7 +3412,7 @@ function Step6Gerar() {
                     onClick={() => setStep("audio")}
                     className="font-semibold text-warn underline underline-offset-2 hover:text-fg-0"
                   >
-                    etapa 03
+                    etapa 02
                   </button>{" "}
                   — o clipe é montado em cima dela.
                 </span>
@@ -3417,7 +3420,23 @@ function Step6Gerar() {
             )}
 
             <div className="flex items-center justify-end gap-2">
-              <Button variant="ghost" size="sm">Cancelar</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (pct > 0 && !done && !falha) {
+                    pararPolling();
+                    wsRef.current?.close();
+                    setEtapa("Acompanhamento interrompido");
+                    setJobId(null);
+                    setPct(0);
+                  } else {
+                    setStep("midia");
+                  }
+                }}
+              >
+                {pct > 0 && !done && !falha ? "Parar acompanhamento" : "Voltar"}
+              </Button>
               <Button
                 variant="neon"
                 size="lg"
@@ -3447,7 +3466,7 @@ function Step6Gerar() {
               v={
                 state.musica.arquivo
                   ? `${state.musica.nomeArquivo ?? "enviada"} · ${formatarDuracao(state.musica.duracao)}`
-                  : "— envie na etapa 03"
+                  : "— envie na etapa 02"
               }
             />
             <SummaryRow k="Imagens" v={`${state.imagens.length} prompts por beat`} />

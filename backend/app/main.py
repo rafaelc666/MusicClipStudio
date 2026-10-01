@@ -934,7 +934,7 @@ def _es_get(caminho: str, params: dict[str, Any] | None = None,
     if not chave:
         raise HTTPException(
             503,
-            detail="Chave do Epidemic Sound não configurada — cole a SUA na Etapa 01 "
+            detail="Chave do Epidemic Sound não configurada — cole a SUA no menu Chaves de API "
                    "(ou defina EPIDEMIC_API_KEY no .env). O upload manual continua funcionando.",
         )
     url = f"{_ES_BASE}{caminho}"
@@ -954,7 +954,7 @@ def _es_get(caminho: str, params: dict[str, Any] | None = None,
         if erro.code in (401, 403):
             raise HTTPException(
                 401,
-                detail="Chave do Epidemic Sound recusada — confira a chave da Etapa 01 (ou EPIDEMIC_API_KEY).",
+                detail="Chave do Epidemic Sound recusada — confira a chave no menu Chaves de API (ou EPIDEMIC_API_KEY).",
             ) from erro
         raise HTTPException(502, detail=f"Epidemic Sound respondeu {erro.code}: {corpo}") from erro
     except (urllib.error.URLError, TimeoutError, ValueError) as erro:
