@@ -26,7 +26,27 @@ from MusicClipStudio.batcher import ClipBatcher, BatchConfig
 from MusicClipStudio.database import StockDatabase
 from MusicClipStudio.agent import ClipAgent
 from MusicClipStudio.maintenance_agent import MaintenanceAgent
-from MusicClipStudio.ui_config import APIConfigUI, abrir_configuracao
+
+# ⚠️ CORRIGIDO (30/09/2026): a janela de configuração (Tk) era importada
+# SEMPRE — e tkinter quebrado/ausente (servidor sem libtk8.6.so) derrubava
+# o import do pacote inteiro. Consequência real: o backend rodava
+# `from MusicClipStudio.transcricao import transcrever` dentro do job de
+# transcrição e morria no ImportError → a transcrição NUNCA funcionava no
+# servidor, embora o resto do app estivesse de pé. Agora a UI é opcional:
+# só quem abre a janela precisa dela.
+try:
+    from MusicClipStudio.ui_config import APIConfigUI, abrir_configuracao
+except Exception as _e_ui:  # ImportError de tkinter ou de libtk8.6.so
+    _ERRO_UI = _e_ui
+    APIConfigUI = None
+
+    def abrir_configuracao(*_a, **_k):
+        raise RuntimeError(
+            "Interface gráfica (Tk) indisponível neste ambiente: "
+            f"{_ERRO_UI}"
+        )
+else:
+    _ERRO_UI = None
 
 __all__ = [
     "ClipConfig",

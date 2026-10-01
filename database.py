@@ -101,6 +101,7 @@ class StockDatabase:
         "coverr": "https://api.coverr.co",
         "giphy": "https://api.giphy.com/v1",
         "openverse": "https://api.openverse.org/v1",
+        "google": "https://www.googleapis.com/customsearch/v1",
     }
 
     def __init__(self, config=None):
@@ -150,6 +151,8 @@ class StockDatabase:
             return self.config.stock_giphy_api_key
         elif provider == "openverse":
             return self.config.stock_openverse_api_key
+        elif provider == "google":
+            return self.config.stock_google_api_key
         return self.config.stock_api_key
 
     def _is_enabled(self, provider: str) -> bool:
@@ -168,6 +171,8 @@ class StockDatabase:
             return self.config.stock_giphy_enabled
         elif provider == "openverse":
             return self.config.stock_openverse_enabled
+        elif provider == "google":
+            return getattr(self.config, "stock_google_enabled", False)
         return True
 
     def pesquisar(
@@ -219,6 +224,8 @@ class StockDatabase:
                 results = self._buscar_giphy(query, max_results)
             elif provider == "openverse":
                 results = self._buscar_openverse(query, max_results)
+            elif provider == "google":
+                results = self._buscar_google(query, max_results)
             else:
                 results = self._buscar_pexels(query, max_results, apenas_fotos, apenas_videos)
         except Exception as e:
@@ -242,6 +249,113 @@ class StockDatabase:
             results=results[:max_results], total=len(results),
             erro=erro,
         )
+
+    def _buscar_google(self, query: str, max_results: int) -> list[StockMedia]:
+        """Busca de imagens na web inteira (o "google busca" que o usuário cobra).
+
+        ⚠️ NOVO (01/10/2026): testado A/B contra os bancos de stock com as
+        MESMAS queries do agente. A busca web traz o objeto LITERAL da letra
+        (a raiz, o solo, a pedra); o stock traz a ESTÉTICA da palavra.
+        Duas rotas:
+          1) Google Custom Search JSON API — se GOOGLE_API_KEY+STOCK_GOOGLE_CSE_ID
+             no .env (ATENÇÃO: exige cartão vinculado ao projeto GCP mesmo na
+             cota grátis de 100 queries/dia — sem cartão o Google responde
+             "Requests to this API are blocked");
+          2) Wikimedia Commons (sem chave, sem cota, sem cartão) — fallback.
+        """
+        import requests
+        chave = self.config.stock_google_api_key
+        cx = self.config.stock_google_cse_id
+        saida: list[StockMedia] = []
+        if chave and cx:
+            try:
+                r = requests.get(self._url("google"), params={
+                    "key": chave, "cx": cx, "q": query,
+                    "searchType": "image", "num": min(max_results, 10),
+                }, timeout=15)
+                r.raise_for_status()
+                for it in r.json().get("items", []) or []:
+                    link = it.get("link", "")
+                    if not link:
+                        continue
+                    img = it.get("image", {}) or {}
+                    saida.append(StockMedia(
+                        id="g_" + str(abs(hash(link)) % 10**12),
+                        url=link,
+                        thumbnail_url=img.get("thumbnailLink", link),
+                        width=int(img.get("thumbnailWidth", 0) or 0),
+                        height=int(img.get("thumbnailHeight", 0) or 0),
+                        source="google",
+                        media_type="photo",
+                        category=query,
+                        tags=[query],
+                        description=(it.get("title", "") or "")[:200],
+                        download_url=link,
+                        search_term=query,
+                    ))
+            except Exception as e:
+                print(f"[StockDB] Google API falhou ({e}); caindo no Bing")
+        if not saida:
+            saida = self._buscar_commons(query, max_results)
+        return saida
+
+    def _buscar_commons(self, query: str, max_results: int) -> list[StockMedia]:
+        """Wikimedia Commons API — busca web literal, sem chave, sem cota, sem cartão.
+
+        ⚠️ NOVO (01/10/2026): caiu no fallback quando a CSE API não está
+        configurada (Google exige cartão até na cota grátis). Medido: para a
+        query do agente ("tree roots soil") o Commons devolve RAIZ LITERAL em
+        alta resolução, enquanto o scrape do Bing devolvia lixo localizado
+        (granja, raposa, texugo) e o i.js do DuckDuckGo bloqueia por
+        TLS-fingerprint. `source="google"` para ocupar o slot da busca web
+        já reservado na galeria.
+        """
+        import requests
+        r = requests.get(
+            "https://commons.wikimedia.org/w/api.php",
+            params={
+                "action": "query", "generator": "search",
+                "gsrsearch": f"filetype:bitmap {query}",
+                "gsrnamespace": "6",
+                "gsrlimit": min(max(max_results, 5), 20),
+                "prop": "imageinfo", "iiprop": "url|size",
+                "iiurlwidth": "1280", "format": "json",
+            },
+            headers={"User-Agent": "MusicClipStudio/1.0 (aplicativo local)"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        pages = (r.json().get("query") or {}).get("pages") or {}
+        saida: list[StockMedia] = []
+        titulos_vistos: set[str] = set()
+        for pg in sorted(pages.values(), key=lambda d: d.get("index", 0)):
+            ii = (pg.get("imageinfo") or [{}])[0]
+            url = ii.get("thumburl") or ii.get("url") or ""
+            if not url:
+                continue
+            # Commons devolve a MESMA imagem em tamanhos diferentes; dedupe
+            # pelo nome do arquivo para a galeria não vir 6x o mesmo quadro.
+            titulo = (pg.get("title", "") or "").lower()
+            if titulo in titulos_vistos:
+                continue
+            titulos_vistos.add(titulo)
+            saida.append(StockMedia(
+                id="wc_" + str(abs(hash(url)) % 10**12),
+                url=url,
+                thumbnail_url=url,
+                width=int(ii.get("thumbwidth") or ii.get("width") or 0),
+                height=int(ii.get("thumbheight") or ii.get("height") or 0),
+                source="google",
+                media_type="photo",
+                category=query,
+                tags=[query],
+                description=(pg.get("title", "") or "")[:200],
+                download_url=url,
+                search_term=query,
+            ))
+            if len(saida) >= max_results:
+                break
+        return saida
 
     @staticmethod
     def _intercalar_tipos(items: list["StockMedia"]) -> list["StockMedia"]:
@@ -288,6 +402,8 @@ class StockDatabase:
             providers.append("giphy")
         if self.config.stock_openverse_enabled:
             providers.append("openverse")
+        if getattr(self.config, "stock_google_enabled", False):
+            providers.append("google")
 
         for provider in providers:
             try:

@@ -1253,11 +1253,19 @@ def gerar_trilha_desativada(payload: ClipProjectPayload) -> dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.post("/api/imagens/gerar-prompts", tags=["imagens"])
-def gerar_prompts_imagens(payload: ClipProjectPayload) -> dict[str, Any]:
+def gerar_prompts_imagens(payload: ClipProjectPayload, request: Request) -> dict[str, Any]:
     """Pede ao agente IA para gerar prompts de busca por beat."""
     if not _BACKBONE_IMPORTED:
         raise HTTPException(500, detail=f"Backbone não carregado: {_BACKBONE_ERROR}")
     _, _, _, agent = _get_backbone()
+    # ⚠️ NOVO (01/10/2026): chave Gemini do usuário logado, do cofre dele,
+    # tem prioridade sobre a GEMINI_API_KEY global do .env. Sem login ou sem
+    # chave própria, _queries_via_llm cai no environment normalmente.
+    try:
+        _cfg_u = _config_do_usuario(request)
+        agent._gemini_key = (getattr(_cfg_u, "gemini_api_key", "") or "").strip()
+    except Exception:
+        agent._gemini_key = ""
     try:
         # CORRIGIDO (19/09/2026): era agent.gerar_prompts_busca() — método que
         # NÃO EXISTE. O real é analisar(), que devolve um AgentPlan com uma

@@ -121,6 +121,190 @@ class ClipAgent:
         # o fallback vira "cross silhouette sunset", "hands raised worship"…
         self._tema = None
 
+    # ── NOVO (01/10/2026): a letra precisa chegar NA BUSCA. ─────────────
+    # Até aqui, linha sem emoção mapeada caía no repertório do mood
+    # ("Minhas raízes descem fundo" → busca "ocean waves") — a queixa
+    # crônica de que a busca não tem a ver com a música. Duas camadas novas,
+    # nessa ordem de prioridade:
+    #   1. leitura emocional confiável  (metáfora → cena filmável) — existente
+    #   2. LLM local (ollama) rescrevendo a linha como busca de stock
+    #   3. palavras concretas da linha (dicionário PT→EN abaixo)
+    #   4. repertório do tema/mood — último recurso, como era
+    CONCRETOS: dict = {
+        # terra e natureza
+        "terra": "earth soil", "raiz": "tree roots", "raizes": "tree roots",
+        "semente": "seed sprout", "germina": "sprouting seed close up",
+        "fruto": "ripe fruit branch", "galho": "tree branch",
+        "folha": "leaf falling", "arvore": "tree", "floresta": "forest",
+        "flor": "flower", "jardim": "garden", "campo": "open field",
+        "montanha": "mountain", "pedra": "rock stone", "rocha": "cliff rock",
+        "solo": "soil ground", "chao": "ground earth close up",
+        "poeira": "dust light beam", "estrada": "road path",
+        "caminho": "path trail", "rio": "river", "agua": "water",
+        "chuva": "rain window", "tempestade": "storm sky",
+        "vento": "wind blowing", "mar": "ocean waves", "onda": "wave",
+        "areia": "sand beach", "ceu": "sky clouds", "sol": "sunlight",
+        "lua": "moon night", "estrela": "stars night sky",
+        "estrelas": "stars night sky", "noite": "night city",
+        "manha": "morning light", "alvorada": "dawn sky", "fogo": "fire flame",
+        "chama": "flame close up", "cinzas": "ashes embers",
+        "luz": "light beam", "sombra": "shadow", "trilha": "forest trail",
+        # gente e corpo
+        "mao": "hand close up", "maos": "hands together",
+        "dedos": "fingers close up", "olho": "eye close up",
+        "olhos": "eyes close up", "rosto": "face portrait",
+        "corpo": "body silhouette", "pe": "barefoot ground",
+        "passo": "walking feet", "caminhada": "walking road",
+        "coracao": "heart", "alma": "soul light", "sangue": "red drip",
+        "beijo": "kiss couple", "abraco": "hugging embrace",
+        "crianca": "child playing", "menino": "boy", "menina": "girl",
+        "avo": "elderly hands", "velho": "old man",
+        "nao": "", "filho": "son father", "filha": "daughter",
+        "pais": "parents family", "mae": "mother", "pai": "father",
+        "gente": "crowd people", "povo": "people crowd",
+        "nacao": "flag country", "pais_patrio": "homeland landscape",
+        # lugares e coisas
+        "casa": "house home", "porta": "door open", "janela": "window",
+        "telhado": "rooftop", "rua": "street", "cidade": "city skyline",
+        "interior": "countryside", "igreja": "church",
+        "cruz": "cross silhouette", "ceu_aberto": "open sky",
+        "carro": "car driving", "trem": "train tracks",
+        "avi": "airplane sky", "barco": "boat sea",
+        "vinho": "wine glass", "pao": "bread table",
+        "mesa": "wooden table", "cadeira": "empty chair",
+        "relagio": "old clock", "relogio": "old clock",
+        "espelho": "mirror reflection", "fotografia": "old photo",
+        "foto": "old photo", "carta": "letter paper",
+        "livro": "open book", "cancao": "singing microphone",
+        "musica": "music vinyl", "guitarra": "guitar",
+        "violao": "acoustic guitar", "piano": "piano keys",
+        "tambo": "drum", "cadeia": "chains", "corrente": "chain link",
+        "faca": "knife", "arma": "weapon dark", "gun": "weapon dark",
+        "corrente_grande": "chain", "memo": "",
+    }
+    # plurais e variantes que o normalizador deixa passar como palavra:
+    CONCRETOS.update({"raizes": "tree roots", "sementes": "seeds sowing",
+                      "frutos": "fruit harvest", "galhos": "branches",
+                      "pedras": "rocks stones", "montanhas": "mountains",
+                      "vales": "valley", "vale": "valley", "rios": "river",
+                      "casas": "village houses", "ruas": "street alley",
+                      "janelas": "window rain", "portas": "doors",
+                      "estrelas ": "stars", "flores": "flowers",
+                      "cinzas ": "ashes", "sombras": "shadows",
+                      "luces": "", "espelhos": "mirror",
+                      "mãos": "hands", "maos2": ""})
+
+    def _concretos_da_linha(self, linha: str) -> str:
+        """Extrai da linha os substantivos/verbos visuais conhecidos e os
+        traduz para a lingua dos bancos de stock (inglês).
+        'Minhas raízes descem fundo' -> 'tree roots soil ground'."""
+        try:
+            from MusicClipStudio.interpretacao import normalizar
+            palavras = normalizar(linha or "").split()
+        except Exception:
+            palavras = (linha or "").lower().replace("\n", " ").split()
+        achados: list[str] = []
+        for w in palavras:
+            termo = self.CONCRETOS.get(w, "")
+            if termo and termo not in achados:
+                achados.append(termo)
+        return " ".join(achados[:3])
+
+    def _queries_via_gemini(self, linhas: list[str], chave: str) -> dict[int, str]:
+        """(01/10/2026) Buscas do agente via Gemini API (nuvem). Mesmo
+        contrato da versão ollama: devolve {indice: query} e {} em QUALQUER
+        falha — upgrade, nunca dependência."""
+        import os, json, re as _re
+        try:
+            import urllib.request
+            lista_txt = "\n".join(f"{i+1}. {l}" for i, l in enumerate(linhas))
+            instr = (
+                "Para cada LINHA de letra de música, escreva UMA busca de "
+                "3 a 6 palavras, em INGLÊS, para achar a imagem (foto ou "
+                "vídeo de stock) que representa a cena da linha — literal "
+                "ou metafórica, cinematográfica. Ex.: \"Minhas raízes "
+                "descem fundo\" -> \"tree roots deep soil\". "
+                "Responda SOMENTE um JSON list de strings, na ordem, sem "
+                "numeração nem comentários.\nLINHAS:\n" + lista_txt)
+            modelo = os.environ.get("MCS_GEMINI_MODELO", "gemini-3.8-flash")
+            url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+                   f"{modelo}:generateContent?key={chave}")
+            body = json.dumps({"contents": [{"parts": [{"text": instr}]}],
+                               "generationConfig": {"temperature": 0.1}}).encode()
+            req = urllib.request.Request(url, data=body,
+                headers={"Content-Type": "application/json"})
+            resp = json.loads(urllib.request.urlopen(req, timeout=60).read())
+            partes = (resp.get("candidates", [{}])[0]
+                          .get("content", {}).get("parts", []))
+            bruto = "".join(p.get("text", "") for p in partes)
+            m = _re.search(r"\[.*\]", bruto, _re.S)
+            if not m:
+                return {}
+            itens = json.loads(m.group(0))
+            saida: dict[int, str] = {}
+            for i, q in enumerate(itens[:len(linhas)]):
+                q = str(q).strip().strip("\"'")
+                if q and len(q.split()) <= 8:
+                    saida[i] = q
+            return saida
+        except Exception:
+            return {}
+
+    def _queries_via_llm(self, linhas: list[str]) -> dict[int, str]:
+        """(01/10/2026) Reescreve cada linha como busca de stock via LLM
+        local (ollama). Uma chamada única com a lista toda; se o ollama não
+        estiver no ar ou responder errado, devolve {} e o fluxo segue com as
+        regras — o LLM é upgrade, nunca dependência. Desative com MCS_LLM=0."""
+        import os, json, re as _re
+        if os.environ.get("MCS_LLM", "1") == "0":
+            return {}
+        # ⚠️ NOVO (01/10/2026): GEMINI_API_KEY no .env → camada nuvem primeiro
+        # (chave do usuário medida funcionando; free tier sem cartão). Sem
+        # Gemini ou em falha, cai no ollama local — e sem os dois, nas regras.
+        chave_gemini = (getattr(self, "_gemini_key", "")
+                        or os.environ.get("GEMINI_API_KEY") or "").strip()
+        if chave_gemini:
+            saida_g = self._queries_via_gemini(linhas, chave_gemini)
+            if saida_g:
+                return saida_g
+        try:
+            import urllib.request
+            modelo = os.environ.get("MCS_LLM_MODELO", "qwen2.5-coder:7b")
+            listing = urllib.request.urlopen(
+                "http://127.0.0.1:11434/api/tags", timeout=2).read()
+            nomes = [m.get("name", "") for m in
+                     json.loads(listing).get("models", [])]
+            if not any(modelo.split(":")[0] in n for n in nomes):
+                return {}
+            lista_txt = "\n".join(f"{i+1}. {l}" for i, l in enumerate(linhas))
+            instr = (
+                "Para cada LINHA de letra de música, escreva UMA busca de "
+                "3 a 6 palavras, em INGLÊS, para achar a imagem (foto ou "
+                "vídeo de stock) que representa a cena da linha — literal "
+                "ou metafórica, cinematográfica. Ex.: \"Minhas raízes "
+                "descem fundo\" -> \"tree roots deep soil\". "
+                "Responda SOMENTE um JSON list de strings, na ordem, sem "
+                "numeração nem comentários.\nLINHAS:\n" + lista_txt)
+            body = json.dumps({"model": modelo, "prompt": instr,
+                               "temperature": 0.1, "stream": False,
+                               "options": {"num_ctx": 4096}}).encode()
+            req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
+                data=body, headers={"Content-Type": "application/json"})
+            resp = json.loads(urllib.request.urlopen(req, timeout=180).read())
+            bruto = resp.get("response", "")
+            m = _re.search(r"\[.*\]", bruto, _re.S)
+            if not m:
+                return {}
+            itens = json.loads(m.group(0))
+            saida: dict[int, str] = {}
+            for i, q in enumerate(itens[:len(linhas)]):
+                q = str(q).strip().strip("\"'")
+                if q and len(q.split()) <= 8:
+                    saida[i] = q
+            return saida
+        except Exception:
+            return {}
+
     def analisar(
         self,
         lyrics: str = "",
@@ -166,6 +350,13 @@ class ClipAgent:
             beats = letras_para_beats(lyrics, duration_estimada=5.0)
         elif description.strip():
             beats = descricao_para_beats(description, duration_estimada=5.0)
+
+        # ⚠️ NOVO (01/10/2026): uma passada de LLM local sobre todas as
+        # linhas, antes do loop — transforma letra em busca de stock com
+        # cabeça. Sem ollama no ar, o dict vazio e as regras assumem.
+        self._llm_queries = self._queries_via_llm(
+            [getattr(b, "lyrics_line", "") or "" for b in beats]
+        ) if beats else {}
 
         # ⚠️ CORRIGIDO (21/09/2026): o índice do beat entra na decisão.
         # Sem ele, todo beat que caía no repertório do mood recebia a MESMA
@@ -239,10 +430,23 @@ class ClipAgent:
             photo_query = cenas[indice % len(cenas)]
             origem = "letra"
         else:
-            # Linha sem carga emocional: repertório do tema/mood global,
-            # girando pelo índice para cada beat ver uma cena diferente.
-            photo_query = self._query_do_mood(mood, indice)
-            origem = "mood"
+            # ⚠️ NOVO (01/10/2026): antes do repertório cego do mood, a
+            # própria linha vira a busca — primeiro pela reescrita do LLM
+            # local, depois pelos concretos traduzidos da letra. Assim
+            # "Minhas raízes descem fundo" busca raízes, não "ocean waves".
+            llm = getattr(self, "_llm_queries", {}) or {}
+            concreto = self._concretos_da_linha(getattr(beat, "lyrics_line", "") or "")
+            if indice in llm:
+                photo_query = llm[indice]
+                origem = "letra_llm"
+            elif concreto:
+                photo_query = f"{concreto} cinematic"
+                origem = "letra_concreta"
+            else:
+                # Linha sem carga e sem palavra visual: repertório do
+                # tema/mood global, girando pelo índice.
+                photo_query = self._query_do_mood(mood, indice)
+                origem = "mood"
 
         # ⚠️ NOVO (23/09/2026): tema livre do usuário qualifica a query
         # final (sufixo curto, estilo busca de stock). Tema musical também

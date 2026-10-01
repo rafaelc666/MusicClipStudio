@@ -40,6 +40,10 @@ PROVEDORES_FIXOS = [
     {"id": "coverr",    "nome": "Coverr",    "tipo": "videos",       "chave_em": "stock_coverr_api_key"},
     {"id": "giphy",     "nome": "Giphy",     "tipo": "gifs/videos",  "chave_em": "stock_giphy_api_key"},
     {"id": "openverse", "nome": "Openverse", "tipo": "fotos",        "chave_em": "stock_openverse_api_key", "gratuita_sem_chave": True},
+    # ⚠️ NOVO (01/10/2026): Gemini não é banco de mídia — é a IA que escreve
+    # as buscas do agente. Entra no mesmo cofre (Fernet, por usuário); sem
+    # chave própria, o backend usa a GEMINI_API_KEY do .env.
+    {"id": "gemini",    "nome": "Gemini (IA)", "tipo": "ia das buscas", "chave_em": "gemini_api_key", "gratuita_sem_chave": True},
 ]
 # Slots livres: ILIMITADOS — o usuário adiciona quantos bancos próprios
 # quiser (⚠️ 23/09/2026: antes eram 2 fixos). Cada slot aponta para a API

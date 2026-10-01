@@ -238,15 +238,21 @@ def transcrever(
     prog(15)
 
     try:
-        # vad_filter remove trechos sem fala. Em música isso é arriscado
-        # (intro instrumental não tem voz), mas ajuda a não inventar
-        # texto em cima de trecho só instrumental.
+        # ⚠️ CORRIGIDO (01/10/2026): vad_filter=True mata CLIPES. O detector de
+        # fala (Silero) entende canto com base como "não-fala" e picota o
+        # áudio: na faixa "01 Raiz" sobraram 2 de 26 linhas (só os 49s
+        # iniciais de 240s), e como cada linha vira cena, o clipe saiu com
+        # 2 cenas. Para música cantada o certo é transcrever inteiro;
+        # trecho instrumental vira segmento vazio, que o loop já descarta.
+        # condition_on_previous_text=False evita o loop de alucinação que
+        # a letra repetida do refrão costuma provocar.
         segmentos_brutos, info = wmodel.transcribe(
             str(caminho),
             language=idioma,
-            vad_filter=True,
+            vad_filter=False,
             beam_size=5,
             word_timestamps=False,
+            condition_on_previous_text=False,
         )
 
         duracao = float(getattr(info, "duration", 0.0) or 0.0)

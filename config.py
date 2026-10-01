@@ -124,6 +124,18 @@ class ClipConfig:
     stock_giphy_enabled: bool = True
     stock_openverse_api_key: str = _env_chave("STOCK_OPENVERSE_API_KEY")
     stock_openverse_enabled: bool = True
+    # ⚠️ NOVO (01/10/2026): Google Custom Search JSON API — busca em toda a
+    # web, não só em bancos de stock. 100 consultas grátis/dia. Requer
+    # GOOGLE_API_KEY (console.cloud.google.com) + STOCK_GOOGLE_CSE_ID
+    # (Programa do Google Search → mecanismo "images").
+    # ⚠️ NOVO (01/10/2026): chave Gemini do AGENTE (quem reescreve a letra em
+    # buscas de imagem). Não é banco de stock — por isso o flag
+    # stock_gemini_enabled só existe para o toggle da UI ter onde cair.
+    gemini_api_key: str = _env_chave("GEMINI_API_KEY")
+    stock_gemini_enabled: bool = True
+    stock_google_api_key: str = _env_chave("GOOGLE_API_KEY")
+    stock_google_cse_id: str = _env_chave("STOCK_GOOGLE_CSE_ID")
+    stock_google_enabled: bool = os.environ.get("MCS_GOOGLE", "1") != "0"  # busca web nao precisa mais de chave (fallback Bing)
     # ⚠️ NOVO (23/09/2026): URLs de API por banco (JSON {"pexels": "https://..."}).
     # Vazio = usa as URLs oficiais. Permite endpoint próprio/proxy por banco —
     # definido pelo usuário no diálogo de chaves e injetado via
