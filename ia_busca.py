@@ -30,6 +30,7 @@ except ImportError:  # pragma: no cover - requests é dependência do projeto
 # Ordem importa: "sk-or-" precisa ser testado antes de "sk-".
 PREFIXOS = (
     ("AIza", "gemini"),
+    ("AQ.",   "gemini"),  # AI Studio (key format 'AQ.Ab8RN6...')
     ("gsk_", "groq"),
     ("sk-or-", "openrouter"),
     ("sk-", "openai"),
@@ -38,7 +39,7 @@ PREFIXOS = (
 # Modelo default por provedor — todos com cota gratuita.
 # (groq/openrouter: llama-3.3-70b, mesmo "espírito" do flash do Google)
 MODELOS_PADRAO = {
-    "gemini": "gemini-2.0-flash",
+    "gemini": "gemini-3.8-flash",  # 2.0-flash aposentado p/ novos usuários (out/26)
     "groq": "llama-3.3-70b-versatile",
     "openrouter": "meta-llama/llama-3.3-70b-instruct:free",
     "openai": "gpt-4o-mini",

@@ -1263,9 +1263,14 @@ def gerar_prompts_imagens(payload: ClipProjectPayload, request: Request) -> dict
     # chave própria, _queries_via_llm cai no environment normalmente.
     try:
         _cfg_u = _config_do_usuario(request)
+        # chave Gemini específica do usuário (do cofre dele)
         agent._gemini_key = (getattr(_cfg_u, "gemini_api_key", "") or "").strip()
+        # NOVO (01/10/2026): chave genérica — Google/Groq/OpenRouter, detectada
+        # por prefixo. Se vier aqui, o agente usa pra nuvem mesmo sem Gemini.
+        agent._ia_gen_key = (getattr(_cfg_u, "stock_ia_api_key", "") or "").strip()
     except Exception:
         agent._gemini_key = ""
+        agent._ia_gen_key = ""
     try:
         # CORRIGIDO (19/09/2026): era agent.gerar_prompts_busca() — método que
         # NÃO EXISTE. O real é analisar(), que devolve um AgentPlan com uma

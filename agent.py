@@ -211,39 +211,54 @@ class ClipAgent:
         return " ".join(achados[:3])
 
     def _queries_via_gemini(self, linhas: list[str], chave: str) -> dict[int, str]:
-        """(01/10/2026) Buscas do agente via Gemini API (nuvem). Mesmo
-        contrato da versão ollama: devolve {indice: query} e {} em QUALQUER
-        falha — upgrade, nunca dependência."""
+        """(01/10/2026) Buscas do agente via nuvem — ROTEIA POR PREFIXO:
+        AIza/AQ. -> Gemini; gsk_ -> Groq; sk-or- -> OpenRouter; sk- -> OpenAI-
+        compat. Reutiliza ia_busca._chamar_llm; se ele nao estiver no path ou
+        o prefixo for desconhecido, cai no caminho direto do Gemini. Contrato:
+        devolve {indice: query} e {} em QUALQUER falha — upgrade, nunca
+        dependencia (o fluxo segue com ollama/regras locais)."""
         import os, json, re as _re
         try:
-            import urllib.request
             lista_txt = "\n".join(f"{i+1}. {l}" for i, l in enumerate(linhas))
             instr = (
-                "Para cada LINHA de letra de música, escreva UMA busca de "
-                "3 a 6 palavras, em INGLÊS, para achar a imagem (foto ou "
-                "vídeo de stock) que representa a cena da linha — literal "
-                "ou metafórica, cinematográfica. Ex.: \"Minhas raízes "
-                "descem fundo\" -> \"tree roots deep soil\". "
+                "Para cada LINHA de letra de musica, escreva UMA busca de "
+                "3 a 6 palavras, em INGLES, para achar a imagem (foto ou "
+                "video de stock) que representa a cena da linha — literal "
+                "ou metafórica, cinematográfica. Ex.: 'Minhas raizes "
+                "descem fundo' -> 'tree roots deep soil'. "
                 "Responda SOMENTE um JSON list de strings, na ordem, sem "
-                "numeração nem comentários.\nLINHAS:\n" + lista_txt)
-            modelo = os.environ.get("MCS_GEMINI_MODELO", "gemini-3.8-flash")
-            url = ("https://generativelanguage.googleapis.com/v1beta/models/"
-                   f"{modelo}:generateContent?key={chave}")
-            body = json.dumps({"contents": [{"parts": [{"text": instr}]}],
-                               "generationConfig": {"temperature": 0.1}}).encode()
-            req = urllib.request.Request(url, data=body,
-                headers={"Content-Type": "application/json"})
-            resp = json.loads(urllib.request.urlopen(req, timeout=60).read())
-            partes = (resp.get("candidates", [{}])[0]
-                          .get("content", {}).get("parts", []))
-            bruto = "".join(p.get("text", "") for p in partes)
-            m = _re.search(r"\[.*\]", bruto, _re.S)
-            if not m:
+                "numeracao nem comentarios.\nLINHAS:\n" + lista_txt)
+
+            bruto = ""
+            # 1a) roteador genérico por prefixo
+            try:
+                import ia_busca as _iab
+                bruto = _iab._chamar_llm(chave, modelo="", prompt=instr, timeout=45) or ""
+            except Exception:
+                bruto = ""
+
+            # 1b) fallback direto Gemini (se ia_busca ausente ou prefixo desconhecido)
+            if not bruto:
+                import urllib.request
+                modelo = os.environ.get("MCS_GEMINI_MODELO", "gemini-3.8-flash")
+                url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+                       f"{modelo}:generateContent?key={chave}")
+                body = json.dumps({"contents": [{"parts": [{"text": instr}]}],
+                                   "generationConfig": {"temperature": 0.1}}).encode()
+                req = urllib.request.Request(url, data=body,
+                    headers={"Content-Type": "application/json"})
+                resp = json.loads(urllib.request.urlopen(req, timeout=60).read())
+                partes = (resp.get("candidates", [{}])[0]
+                              .get("content", {}).get("parts", []))
+                bruto = "".join(p.get("text", "") for p in partes)
+
+            mm = _re.search(r"\[.*\]", bruto, _re.S)
+            if not mm:
                 return {}
-            itens = json.loads(m.group(0))
+            itens = json.loads(mm.group(0))
             saida: dict[int, str] = {}
             for i, q in enumerate(itens[:len(linhas)]):
-                q = str(q).strip().strip("\"'")
+                q = str(q).strip().strip('\"').strip("'")
                 if q and len(q.split()) <= 8:
                     saida[i] = q
             return saida
@@ -261,10 +276,19 @@ class ClipAgent:
         # ⚠️ NOVO (01/10/2026): GEMINI_API_KEY no .env → camada nuvem primeiro
         # (chave do usuário medida funcionando; free tier sem cartão). Sem
         # Gemini ou em falha, cai no ollama local — e sem os dois, nas regras.
-        chave_gemini = (getattr(self, "_gemini_key", "")
-                        or os.environ.get("GEMINI_API_KEY") or "").strip()
-        if chave_gemini:
-            saida_g = self._queries_via_gemini(linhas, chave_gemini)
+        # ordem: (1) Gemini específica do usuário logado → (2) chave genérica
+        # do cofre dele → (3) GEMINI_API_KEY global → (4) STOCK_IA_API_KEY
+        # global. Todas passam pelo MESMO roteador por prefixo.
+        chaves_nuvem = [
+            (getattr(self, "_gemini_key", "") or "").strip(),
+            (getattr(self, "_ia_gen_key", "") or "").strip(),
+            (os.environ.get("GEMINI_API_KEY") or "").strip(),
+            (os.environ.get("STOCK_IA_API_KEY") or "").strip(),
+        ]
+        for ch in chaves_nuvem:
+            if not ch:
+                continue
+            saida_g = self._queries_via_gemini(linhas, ch)
             if saida_g:
                 return saida_g
         try:

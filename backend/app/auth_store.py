@@ -44,6 +44,12 @@ PROVEDORES_FIXOS = [
     # as buscas do agente. Entra no mesmo cofre (Fernet, por usuário); sem
     # chave própria, o backend usa a GEMINI_API_KEY do .env.
     {"id": "gemini",    "nome": "Gemini (IA)", "tipo": "ia das buscas", "chave_em": "gemini_api_key", "gratuita_sem_chave": True},
+    # Chave GENÉRICA de IA — aceita qualquer prefixo: Google (AIza…), Gemini
+    # AI Studio (AQ.…), Groq (gsk_…), OpenRouter (sk-or-…), OpenAI-compat (sk-…).
+    # O provedor é detectado pelo prefixo em ia_busca.detectar_provedor().
+    {"id": "ia_gen",    "nome": "Chave de IA (Google/Groq/OpenRouter…)",
+     "tipo": "ia das buscas", "chave_em": "stock_ia_api_key",
+     "gratuita_sem_chave": True},
 ]
 # Slots livres: ILIMITADOS — o usuário adiciona quantos bancos próprios
 # quiser (⚠️ 23/09/2026: antes eram 2 fixos). Cada slot aponta para a API
