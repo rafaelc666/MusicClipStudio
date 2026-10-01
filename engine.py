@@ -371,7 +371,9 @@ class MusicClipEngine:
             # 6. Legendas de letras
             # A queima de legendas depende do Compositor do scene_engine. No
             # fallback, preservamos o MP4 válido em vez de falhar no final.
-            if lyrics and self.config.lyrics_active and has_scene_engine:
+            # ⚠️ FIX (01/10/2026): aceita (lyrics OR legendas) — etapa 03 é soberana;
+            # vídeos instrumentais sem letra na etapa 01 podem ter legenda na 03.
+            if (lyrics or legendas) and self.config.lyrics_active and has_scene_engine:
                 self._progress(88, "legendas", "Gerando legendas...")
                 srt_path = Path(output).with_suffix(".srt")
                 if legendas:
@@ -392,7 +394,7 @@ class MusicClipEngine:
                 )
                 video_path = Path(final_com_legenda)
                 self._progress(92, "legendas", "Legendas adicionadas")
-            elif lyrics and self.config.lyrics_active:
+            elif (lyrics or legendas) and self.config.lyrics_active:
                 self._progress(92, "legendas", "Fallback sem legendas — MP4 preservado")
 
             # Limpeza dos intermediários desta geração — sobra apenas o vídeo
