@@ -405,9 +405,12 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
             <div className="h-4 w-px bg-white/10 mx-2" />
 
             <div className="flex items-center gap-2">
-              <span className="text-[13px] text-fg-0 font-semibold truncate max-w-[300px]">
-                {state.title || "Novo clipe musical"}
-              </span>
+              <input
+                className="text-[13px] text-fg-0 font-semibold bg-transparent border-none outline-none max-w-[300px] w-[180px] px-0 placeholder:text-fg-3"
+                value={state.title}
+                placeholder="Novo clipe musical"
+                onChange={(e) => setState((s) => ({ ...s, title: e.target.value }))}
+              />
               {isWizard && (
                 <span className="rounded-full border border-neon/20 bg-neon/10 px-2 py-0.5 text-[10px] text-neon font-semibold tracking-wide">
                   WIZARD · 6 ETAPAS

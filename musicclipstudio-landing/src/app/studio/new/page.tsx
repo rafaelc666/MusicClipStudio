@@ -508,9 +508,25 @@ Dica: você também pode carregar um arquivo .txt ou transcrever do áudio na pr
                 </button>
               )}
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-sm border border-white/10 bg-bg-3 px-2.5 py-1 text-[12px] text-fg-1 hover:border-neon/30 transition-colors">
                 <Upload className="h-3.5 w-3.5" /> Carregar .txt
-              </Button>
+                <input
+                  type="file"
+                  accept=".txt,.lrc,text/plain"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const texto = String(reader.result || "").trim();
+                      if (texto) setState((s) => ({ ...s, letra: texto }));
+                    };
+                    reader.readAsText(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
               <Button
                 size="sm"
                 variant="subtle"
