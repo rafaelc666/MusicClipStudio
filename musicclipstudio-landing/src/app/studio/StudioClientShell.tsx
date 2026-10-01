@@ -400,6 +400,7 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
                   variant="ghost"
                   className="gap-1 text-[11.5px] text-fg-3 hover:text-warn"
                   onClick={() => {
+                    if (!window.confirm("Zerar o projeto atual? Isso apaga letra, legenda, mídia e progressos.")) return;
                     window.localStorage.removeItem("musicclipstudio_wizard_v1");
                     setState({
                       ...DEFAULT_STATE,
