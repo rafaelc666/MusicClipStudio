@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Toaster, toast } from "sonner";
-import { ArrowLeft, Bell, HelpCircle, Command as CmdIcon, Save, FolderOpen, KeyRound, LogOut, Loader2 } from "lucide-react";
+import { ArrowLeft, Bell, HelpCircle, Command as CmdIcon, Save, FolderOpen, KeyRound, LogOut, Loader2, FilePlus2 } from "lucide-react";
 import { StudioSidebar, STUDIO_STEPS, type StudioStepKey } from "@/components/studio/StudioSidebar";
 import { StudioIntro, useIntroDeSessao } from "@/components/studio/StudioIntro";
 import { AuthProvider, useAuth } from "@/components/studio/AuthProvider";
@@ -391,6 +391,25 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
                 <KeyRound className="h-3.5 w-3.5" />
                 Chaves de API
               </Button>
+              {isWizard && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1 text-[11.5px] text-fg-3 hover:text-warn"
+                  onClick={() => {
+                    window.localStorage.removeItem("musicclipstudio_wizard_v1");
+                    setState({
+                      ...DEFAULT_STATE,
+                      id: "local_" + Math.random().toString(36).slice(2, 10),
+                      createdAt: Date.now(),
+                    });
+                    toast.success("Projeto zerado", { description: "Pode começar de novo." });
+                  }}
+                >
+                  <FilePlus2 className="h-3.5 w-3.5" />
+                  Novo
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
