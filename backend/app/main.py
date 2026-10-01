@@ -343,6 +343,10 @@ class ProjectSavePayload(BaseModel):
     midia: list[Any] = Field(default_factory=list)
     completedSteps: dict[str, Any] = Field(default_factory=dict)
     activeStep: str = "letra"
+    # Campos adicionados (01/10/2026) — soberania da etapa 03
+    legendaEditada: Optional[bool] = None
+    legendaEstilo: Optional[dict[str, Any]] = None
+    formato: Optional[str] = None
     # Escape hatch para o frontend evoluir sem mexer no backend
     extras: dict[str, Any] = Field(default_factory=dict)
 
