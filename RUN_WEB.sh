@@ -12,6 +12,12 @@ PYTHON="./venv/bin/python"
 LOG_B="/tmp/mcs_backend.log"
 LOG_F="/tmp/mcs_frontend.log"
 
+# 🧠 Terabrain (opcional): ao fim de cada geração, registra um
+# resumo do clipe como memória na Biblioteca Sophia. Descomente
+# e aponte para a pasta da BibliotecaSophia. Sem isso, o
+# registro fica desativado (e nunca atrapalha a geração).
+# export SOPHIA_DIR="/run/media/rafael/Novo volume/BibliotecaSophia"
+
 if [ ! -x "$PYTHON" ]; then
   echo "[ERRO] venv não encontrado. Rode antes:"
   echo "  python -m venv venv && ./venv/bin/pip install -r requirements-web.txt"

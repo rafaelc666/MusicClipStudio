@@ -1570,6 +1570,49 @@ def buscar_midia(payload: SearchMediaPayload, request: Request) -> dict[str, Any
 # Etapa 06 · Gerar (long-running via WebSocket /jobs)
 # ═══════════════════════════════════════════════════════════════════════
 
+# ============================================================
+# TERABRAIN — memória de agentes (Biblioteca Sophia)
+# Opt-in: defina SOPHIA_DIR com o caminho da pasta da
+# BibliotecaSophia. Sem a variável, é um no-op silencioso.
+# ============================================================
+def _registrar_memoria_terabrain(job_id: str, payload: GeneratePayload,
+                                  destino_final: Path, imagens: list) -> None:
+    """Grava um resumo do clipe concluído no Terabrain (Biblioteca
+    Sophia) via CLI. Fire-and-forget: nunca bloqueia nem quebra o job."""
+    sophia_dir = os.environ.get("SOPHIA_DIR", "").strip()
+    if not sophia_dir:
+        return
+
+    cli = Path(sophia_dir) / "terabrain.py"
+    if not cli.is_file():
+        print(f"[Terabrain] CLI não achada em {cli} — memória não registrada.", flush=True)
+        return
+
+    py = Path(sophia_dir) / ".venv" / "Scripts" / "python.exe"
+    if not py.is_file():
+        py = Path(sophia_dir) / ".venv" / "bin" / "python"
+    if not py.is_file():
+        py = Path(sys.executable)
+
+    proj = payload.project
+    memoria = (
+        f"[MCS] Clip '{proj.title or 'Sem título'}' (job {job_id}) concluído às "
+        f"{time.strftime('%Y-%m-%d %H:%M:%S')}. {len(imagens or [])} cenas, "
+        f"formato {proj.format or '—'}, artista {proj.artist or '—'}, "
+        f"saída {destino_final.name}. Descrição: {(proj.description or '')[:200]}"
+    )
+
+    try:
+        subprocess.run(
+            [str(py), str(cli), memoria,
+             "--biblioteca", "Terabrain", "--origem", "mcs"],
+            capture_output=True, text=True, timeout=180,
+        )
+        print(f"[Terabrain] memória do job {job_id} registrada.", flush=True)
+    except Exception as e:
+        print(f"[Terabrain] falha ao registrar memória (ignorado): {e}", flush=True)
+
+
 def _run_generation_sync(job_id: str, payload: GeneratePayload):
     """Executa a geração em thread separada e grava eventos em _jobs[job_id]."""
     cfg, engine, _, _ = _get_backbone()
@@ -1803,6 +1846,14 @@ def _run_generation_sync(job_id: str, payload: GeneratePayload):
         }
         job["status"] = "done"
         _evt("done", {"output": str(destino_final)})
+
+        # 🧠 TERABRAIN: registra o clipe concluído como memória na
+        # Biblioteca Sophia (opt-in via SOPHIA_DIR). Fire-and-forget.
+        threading.Thread(
+            target=_registrar_memoria_terabrain,
+            args=(job_id, payload, destino_final, imagens),
+            daemon=True,
+        ).start()
 
     except Exception as e:
         job["status"] = "error"
