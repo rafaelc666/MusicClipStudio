@@ -145,7 +145,9 @@ export default function StudioDashboardPage() {
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link href="/studio/new">
+              {/* ⚠️ 01/10/2026: ?novo=1 diz ao shell para NÃO
+                  restaurar o clipe anterior do localStorage. */}
+              <Link href="/studio/new?novo=1">
                 <Button variant="neon" size="lg" className="btn-shine gap-2">
                   <Plus className="h-4 w-4" strokeWidth={2.6} />
                   Criar novo projeto

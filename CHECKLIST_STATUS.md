@@ -1,6 +1,33 @@
 # Checklist de Status — MusicClipStudio
 
-> Atualizado: 2026-09-23 (sessão Manjaro/Linux)
+> Atualizado: 2026-10-01 (sessão de checagem geral + bugs)
+
+## 🔧 SESSÃO 01/10/2026 — checagem geral (antes do CRM)
+
+| # | Achado | Estado |
+|---|--------|--------|
+| S1 | **/studio não carregava** ("This page couldn't load"): servidor Next rodando com build ANTIGO na memória enquanto o `.next` em disco foi reconstruído (14:19) → HTML pedia 3 chunks que não existiam mais (2 js + 1 css = 404) | **CORRIGIDO** — frontend reiniciado (double-fork do RUN_WEB.sh); 12/12 chunks 200; APIs pelo proxy 200 |
+| S2 | **Config de produção poluída por teste**: `test_config_persistence` salvava no `~/.gerador_clipes_config.json` REAL → `output_dir` virou `/tmp/test_clip_output` | **CORRIGIDO** — config restaurada (backup `.bak-20261001`); teste agora isola o arquivo num tmp (try/finally) |
+| S3 | **Suíte vermelha** (1 erro): `test_rotulos_reais_da_ui_estao_cobertos` importava `gui_clipes`, que dá `sys.exit(1)` no import sem tkinter (libtk8.6.so ausente) | **CORRIGIDO** — teste pula com skip claro nesse ambiente; com tkinter volta a travar os rótulos |
+| S4 | Verificações gerais: health `backbone_ready: true`; login `studio51` ok (frontend manda `username`/`password`, contrato correto); `/api/config` com `output_dir` real (`producao/clipes`); `/api/jobs`, `/api/projetos` ok; suíte **155 testes OK (skipped=2)** | ✓ |
+
+### 🔍 Continuação da caça (01/10/2026 — 2º turno)
+
+| # | Achado | Estado |
+|---|--------|--------|
+| S5 | **Path traversal de ESCRITA nos uploads** (`/api/upload/audio` e `/api/upload/imagem`): `file.filename` entrava cru no destino — `"a/../../evil.mp3"` escapava de `output/uploads` e escrevia em qualquer pasta acessível ao processo (extensão permitida, pois `Path("a/../../evil.mp3").suffix` é `.mp3`) | **CORRIGIDO** — novo `_nome_arquivo_seguro()` (basename após normalizar `/` e `\`, sem byte nulo) nos 2 endpoints; repro confirma: arquivo fica em `uploads/`, nada escapa, nomes normais e a rejeição 415 seguem OK |
+| S6 | **Path traversal de LEITURA em `/api/clipes/{arquivo}`**: rejeitava `/` e `..` mas **não `\`** — no Windows (`INSTALAR-WINDOWS.bat`) `..\..\x.mp4` escapava de `CLIPS_DIR` | **CORRIGIDO** — rejeita `\` e byte nulo também; repro: `..%5C..%5Cevil.mp4` → 400 |
+| S7 | **`max_results` sem limite** em `/api/midia/buscar`: valor negativo quebrava fatiamento interno dos provedores; gigante estourava cota de API (Pexels limita 80/página) | **CORRIGIDO** — clamp `1..100` (frontend sempre manda 8, sem impacto) |
+| S8 | Suspeita do repro `_tmp_repro_custom_url.py` (limpar URL de banco próprio `custom_N` → TypeError): **NÃO se reproduz** — `definir_chave` já opera em `custom[idx]` (dict), não na lista. Repro mantido como regressão | ✓ descartado |
+| S9 | Verificação end-to-end dos 6 fixes do 1º turno via TestClient (gemini/ia_gen com chave falsa → chamada real à API, erro gracioso 200 em vez de 500; desligar `ia_gen` não quebra `/api/midia/buscar`; pexels sem regressão) | ✓ |
+| S10 | Suíte após tudo: **154 passed, 7 skipped** (12s) | ✓ |
+| S11 | **"Failed to fetch" no diálogo de chaves** + wizard voltou a pedir chaves: a stack estava PARADA (backend 8300 e frontend 3100 recusavam conexão — `PARAR_WEB.sh` do turno anterior a derrubou e não foi re-subida). "Failed to fetch" = erro de REDE (sem resposta HTTP), não perda de dados: `Step0Chaves`/`ProvedoresDialog` fazem `authApi.provedores()`, e no catch o wizard zera o resumo ("0 bancos configurados") | **RESOLVIDO** — stack restabelecida com `RUN_WEB.sh` (8300 ✓ 3100 ✓). Comprovado: studio51 tem **7 chaves salvas** no `output/usuarios.db` (decriptografam OK: openverse, giphy, coverr, nasa, unsplash, pixabay, pexels); prova ponta a ponta via porta 3100 (caminho real do navegador): registrar → 0/10 → salvar chave pexels → 1/10 → relogin com cookie NOVO → `configurada: True`. Chaves são por usuário e persistem após relogin |
+
+> Repros: `_tmp_verify_fix.py` (fixes do 1º turno), `_tmp_verify_traversal.py` (S5–S7). Usuários de teste do DB removidos (só `studio51` resta).
+
+---
+
+> Histórico: 2026-09-23 (sessão Manjaro/Linux)
 
 ## Legenda
 

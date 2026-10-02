@@ -57,10 +57,19 @@ class TestConfig(unittest.TestCase):
 
     def test_config_persistence(self):
         import tempfile
-        cfg = ClipConfig(output_dir="/tmp/test_clip_output")
-        save_config(cfg)
-        loaded = load_config()
-        self.assertEqual(cfg.output_dir, loaded.output_dir)
+        from pathlib import Path
+        import MusicClipStudio.config as config_mod
+        # isola o arquivo real (~/.gerador_clipes_config.json): antes, este
+        # teste salvava na config de produção e o output_dir virava /tmp (01/10)
+        original = config_mod.CLIP_CONFIG_FILE
+        config_mod.CLIP_CONFIG_FILE = Path(tempfile.mkdtemp()) / "cfg_teste.json"
+        try:
+            cfg = ClipConfig(output_dir="/tmp/test_clip_output")
+            save_config(cfg)
+            loaded = load_config()
+            self.assertEqual(cfg.output_dir, loaded.output_dir)
+        finally:
+            config_mod.CLIP_CONFIG_FILE = original
 
     def test_config_from_dict(self):
         cfg = ClipConfig()
@@ -1508,7 +1517,13 @@ class TestModoParaFlags(unittest.TestCase):
 
     def test_rotulos_reais_da_ui_estao_cobertos(self):
         """Trava os rotulos: se a UI mudar o texto, este teste avisa."""
-        from MusicClipStudio.gui_clipes import GuiClipes
+        try:
+            from MusicClipStudio.gui_clipes import GuiClipes
+        except (ImportError, SystemExit):
+            # ambiente sem tkinter (libtk8.6.so ausente neste Linux): a GUI
+            # desktop não importa — não é bug da web; com tkinter instalado
+            # o teste volta a travar os rotulos de verdade
+            self.skipTest("GUI desktop indisponível sem tkinter neste ambiente")
         import inspect, re
 
         fonte = inspect.getsource(GuiClipes._criar_frame_imagens)

@@ -2931,9 +2931,33 @@ function Step5Midia({ onNext }: { onNext: () => void }) {
                 As cenas na ordem em que aparecem, cada uma com o efeito que você escolheu.
               </CardDescription>
             </div>
-            <Badge variant={escolhidas.length > 0 ? "neon" : "default"}>
-              {escolhidas.length} {escolhidas.length === 1 ? "cena" : "cenas"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant={escolhidas.length > 0 ? "neon" : "default"}>
+                {escolhidas.length} {escolhidas.length === 1 ? "cena" : "cenas"}
+              </Badge>
+              {/* ⚠️ NOVO (01/10/2026) — a sequência vinha do
+                  localStorage e o usuário não tinha como esvaziá-la
+                  de uma vez (o "Limpar" ficava lá em cima, no card
+                  de busca). Com o botão aqui, dá para começar a
+                  seleção do zero sem perder o resto do projeto. */}
+              {escolhidas.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1 text-[11.5px] text-fg-3 hover:text-warn"
+                  title="tirar todas as cenas da sequência"
+                  onClick={() => {
+                    if (!window.confirm(`Limpar as ${escolhidas.length} cenas da sequência?`)) return;
+                    setResultados([]);
+                    setBuscou(false);
+                    setState((s) => ({ ...s, midia: [] }));
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Limpar sequência
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
 

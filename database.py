@@ -87,6 +87,31 @@ def _escolher_variante_video(video_files):
     return por_altura[-1].get("link", "")
 
 
+def _titulo_da_slug(url: str, fallback: str) -> str:
+    """Título legível a partir do slug de uma URL de página.
+
+    ⚠️ NOVO (01/10/2026): a API de VÍDEOS do Pexels não devolve
+    campo de título — só a URL da página
+    (`.../video/woman-asking-a-question-5211956/`). Antes o
+    `description` guardava essa URL crua e a etapa 05 mostrava
+    o link em vez do nome, impossibilitando saber qual vídeo
+    recebe cada efeito. O slug é o título em kebab-case: tira-se
+    o id numérico do final e troca-se `-` por espaço.
+    """
+    slug = (url or "").rstrip("/").rsplit("/", 1)[-1]
+    partes = [p for p in slug.split("-") if p]
+    if partes and partes[-1].isdigit():
+        partes.pop()
+    if len(partes) < 2:
+        # slug sem palavras de verdade (ex.: "id-36510")
+        # não é título — vai para o fallback legível
+        return fallback
+    titulo = " ".join(partes).strip()
+    if not titulo:
+        return fallback
+    return titulo[0].upper() + titulo[1:]
+
+
 class StockDatabase:
     """Banco de dados de mídia gratuita para clipes."""
 
@@ -638,7 +663,10 @@ class StockDatabase:
                         media_type="video",
                         category=self.config.stock_category,
                         tags=[],
-                        description=video.get("url", ""),
+                        description=_titulo_da_slug(
+                            video.get("url", ""),
+                            f"Vídeo Pexels #{video.get('id', i)}",
+                        ),
                         download_url=best_video,
                         video_url=best_video,
                     ))
@@ -688,7 +716,8 @@ class StockDatabase:
                         media_type="photo",
                         category=self.config.stock_category,
                         tags=[tag.strip() for tag in hit.get("tags", "").split(",")],
-                        description=hit.get("largeImageURL", ""),
+                        description=hit.get("tags", "")
+                        or f"Foto Pixabay #{hit.get('id', i)}",
                         download_url=hit.get("largeImageURL", ""),
                     ))
             except Exception as e:
@@ -725,7 +754,8 @@ class StockDatabase:
                         media_type="video",
                         category=self.config.stock_category,
                         tags=[tag.strip() for tag in hit.get("tags", "").split(",")],
-                        description=hit.get("pageURL", ""),
+                        description=hit.get("tags", "")
+                        or f"Vídeo Pixabay #{hit.get('id', i)}",
                         download_url=best_video,
                         video_url=best_video,
                     ))
@@ -752,6 +782,12 @@ class StockDatabase:
             results = []
             for i, photo in enumerate(data.get("results", [])[:max_results]):
                 urls = photo.get("urls", {})
+                autor = photo.get("user", {}).get("name")
+                titulo = (
+                    photo.get("alt_description")
+                    or photo.get("description")
+                    or (f"Foto Unsplash por {autor}" if autor else "Foto Unsplash")
+                )
                 results.append(StockMedia(
                     id=f"unsplash_{photo.get('id', i)}",
                     url=urls.get("regular", ""),
@@ -762,7 +798,7 @@ class StockDatabase:
                     media_type="photo",
                     category=self.config.stock_category,
                     tags=[tag.get("title", "") for tag in photo.get("keywords", [])],
-                    description=photo.get("description", ""),
+                    description=titulo,
                     download_url=urls.get("full", ""),
                 ))
             return results

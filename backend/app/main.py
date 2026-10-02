@@ -66,7 +66,7 @@ from backend.app.projects_store import ProjectsStore
 # Usuários (nome+senha) e chaves de API criptografadas por usuário, em SQLite.
 # As chaves do .env continuam valendo como fallback global quando o usuário
 # não cadastrou a própria.
-from backend.app.auth_store import AuthStore
+from backend.app.auth_store import AuthStore, PROV_POR_ID
 _AUTH = AuthStore(base_dir=BASE_DIR)
 
 # ── Imports do app existente ────────────────────────────────────────
@@ -286,6 +286,21 @@ UPLOAD_DIR = OUTPUT_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 CLIPS_DIR = OUTPUT_DIR / "clipes"
 CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _nome_arquivo_seguro(nome: Any, padrao: str) -> str:
+    """Nome base de um arquivo recebido via multipart.
+
+    ⚠️ CORRIGIDO (01/10/2026): `UploadFile.filename` vem do
+    cliente — um nome como "a/../../evil.mp3" ou "..\\evil.mp3"
+    era concatenado ao caminho de destino e ESCREVIA fora de
+    output/uploads (path traversal de escrita). Só o nome base
+    (após normalizar / e \\) entra no nome de destino.
+    """
+    limpo = str(nome or "").replace("\\", "/").split("/")[-1]
+    limpo = limpo.replace("\x00", "").strip()
+    return limpo or padrao
+
 
 app.mount("/static/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
 
@@ -537,9 +552,17 @@ def testar_provedor(payload: ChavePayload, request: Request) -> dict[str, Any]:
         engine = _AUTH.tipo_do_provedor(usuario["id"], payload.provedor_id)
     except ValueError as e:
         raise HTTPException(400, detail=str(e))
-    # A chave recém-digitada tem prioridade sobre a salva
+    # A chave recém-digitada tem prioridade sobre a salva.
+    # ⚠️ CORRIGIDO (01/10/2026): o campo NÃO é sempre
+    # `stock_<engine>_api_key` — Gemini grava em `gemini_api_key`
+    # e a chave genérica em `stock_ia_api_key` (ver PROVEDORES_FIXOS
+    # em auth_store). O nome montado à mão fazia o
+    # dataclasses.replace levantar TypeError → HTTP 500 toda vez
+    # que o usuário testava um dos 2 provedores de IA com chave
+    # digitada no diálogo.
     if payload.chave.strip():
-        cfg = dataclasses.replace(cfg, **{f"stock_{engine}_api_key": payload.chave.strip()})
+        campo_chave = PROV_POR_ID.get(engine, {}).get("chave_em") or f"stock_{engine}_api_key"
+        cfg = dataclasses.replace(cfg, **{campo_chave: payload.chave.strip()})
     # ⚠️ 23/09: URL recém-digitada também é testada antes de salvar
     if payload.url and payload.url.strip():
         try:
@@ -548,6 +571,35 @@ def testar_provedor(payload: ChavePayload, request: Request) -> dict[str, Any]:
             urls_map = {}
         urls_map[engine] = payload.url.strip()
         cfg = dataclasses.replace(cfg, stock_urls=json.dumps(urls_map))
+    # ⚠️ CORRIGIDO (01/10/2026): gemini/ia_gen NÃO são bancos de
+    # mídia — db.testar_conexao() só conhece os 7 e devolvia
+    # "Provedor desconhecido", marcando todo teste de IA como
+    # "Falhou" mesmo com chave válida. O teste real deles é a
+    # própria chamada de LLM (ia_busca.testar, o mesmo caminho
+    # das buscas).
+    if engine in ("gemini", "ia_gen"):
+        from MusicClipStudio import ia_busca
+        chave_ia = payload.chave.strip() or str(
+            getattr(cfg, PROV_POR_ID[engine]["chave_em"], "") or ""
+        )
+        if not chave_ia:
+            return {
+                "ok": False, "sucesso": False,
+                "mensagem": "Chave de IA não informada — digite-a acima e teste de novo.",
+            }
+        base_url = str(getattr(cfg, "stock_ia_base_url", "") or "")
+        if engine == "ia_gen" and payload.url and payload.url.strip():
+            base_url = payload.url.strip()
+        resultado = ia_busca.testar(
+            chave_ia,
+            modelo=str(getattr(cfg, "stock_ia_model", "") or ""),
+            base_url=base_url,
+        )
+        ok = bool(resultado.get("ok"))
+        msg = resultado.get("erro") or (
+            f"IA respondeu ({resultado.get('provedor')} · {resultado.get('modelo')})"
+        )
+        return {"ok": ok, "sucesso": ok, "mensagem": msg}
     db = StockDatabase(cfg)
     try:
         bruto = db.testar_conexao(engine)
@@ -674,13 +726,26 @@ def analisar_letra(payload: ClipProjectPayload) -> dict[str, Any]:
         duration_beat=payload.duration_beat,
     )
     palavras = (payload.lyrics or "").split()
+    # ⚠️ CORRIGIDO (01/10/2026): MusicBeat NÃO tem to_dict() nem
+    # os campos texto/duracao — são script/lyrics_line/duration.
+    # O fallback devolvia {texto: "", duracao: 5.0} para todo
+    # beat, apagando a letra dos beats da resposta.
+    def _beat_dict(b: Any) -> dict[str, Any]:
+        script = getattr(b, "script", "") or ""
+        linha = getattr(b, "lyrics_line", "") or ""
+        return {
+            "id": getattr(b, "id", 0),
+            "tipo": getattr(b, "type", ""),
+            "duracao": getattr(b, "duration", 0.0),
+            "script": script,
+            "texto": linha or script,
+            "letra": linha,
+        }
     return {
         "total_beats": len(beats),
         "total_palavras": len(palavras),
         "duracao_estimada_seg": round(len(beats) * payload.duration_beat, 1),
-        "beats": [b.to_dict() if hasattr(b, "to_dict") else {"texto": getattr(b, "texto", ""),
-                                                              "duracao": getattr(b, "duracao", 5.0)}
-                 for b in beats],
+        "beats": [_beat_dict(b) for b in beats],
     }
 
 
@@ -708,7 +773,19 @@ async def upload_audio(file: UploadFile = File(...), request: Request = None) ->
     """
     usuario = _usuario_atual(request) if request else None
     dono = f"u{usuario['id']}_" if usuario else "anon_"
-    filename = f"{dono}{uuid.uuid4().hex}_{file.filename or 'audio.mp3'}"
+    # ⚠️ CORRIGIDO (01/10/2026): não havia validação de extensão —
+    # um .txt (ou qualquer coisa) era aceito como "áudio", salvo em
+    # output/uploads e só falhava depois, na transcrição/render.
+    # A lista de "uploads recentes" já filtra por _EXT_AUDIO; agora
+    # a porta de entrada também filtra, com erro claro.
+    nome_original = _nome_arquivo_seguro(file.filename, "audio.mp3")
+    if Path(nome_original).suffix.lower() not in _EXT_AUDIO:
+        raise HTTPException(
+            415,
+            detail=f"Arquivo não é de áudio ('.{Path(nome_original).suffix.lstrip('.')}'). "
+                   f"Envie um dos formatos: {', '.join(_EXT_AUDIO)}.",
+        )
+    filename = f"{dono}{uuid.uuid4().hex}_{nome_original}"
     destino = UPLOAD_DIR / filename
     contents = await file.read()
     with open(destino, "wb") as f:
@@ -775,7 +852,18 @@ async def upload_imagem(file: UploadFile = File(...), request: Request = None) -
     """Recebe uma imagem/vídeo local do usuário para usar como cena no clipe."""
     usuario = _usuario_atual(request) if request else None
     dono = f"u{usuario['id']}_" if usuario else "anon_"
-    nome = f"{dono}{uuid.uuid4().hex}_{file.filename or 'imagem.png'}"
+    # ⚠️ CORRIGIDO (01/10/2026): mesma validação de extensão do
+    # upload de áudio — aqui só mídia (foto/vídeo) serve como cena.
+    _EXT_CENA = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp",
+                 ".mp4", ".webm", ".mov", ".m4v", ".ogv")
+    nome_original = _nome_arquivo_seguro(file.filename, "imagem.png")
+    if Path(nome_original).suffix.lower() not in _EXT_CENA:
+        raise HTTPException(
+            415,
+            detail=f"Arquivo não é mídia ('.{Path(nome_original).suffix.lstrip('.')}'). "
+                   f"Envie foto ou vídeo: {', '.join(_EXT_CENA)}.",
+        )
+    nome = f"{dono}{uuid.uuid4().hex}_{nome_original}"
     destino = UPLOAD_DIR / nome
     conteudo = await file.read()
     destino.write_bytes(conteudo)
@@ -1382,10 +1470,19 @@ def _config_do_usuario(request: Request) -> Any:
     # verdade a busca — sem isso, banco desligado continuava sendo consultado.
     habilitados = _AUTH.habilitados_do_usuario(usuario["id"])
     overrides: dict[str, Any] = dict(chaves)
+    # ⚠️ CORRIGIDO (01/10/2026): só bancos de MÍDIA têm o flag
+    # `stock_<id>_enabled` no ClipConfig. "ia_gen" (chave genérica
+    # de IA) não é engine de mídia e `stock_ia_gen_enabled` NÃO
+    # existe — o dataclasses.replace levantava TypeError e derrubava
+    # TODA busca (/api/midia/buscar → 500) assim que o usuário
+    # desligava a chave genérica no diálogo de provedores.
+    campos_cfg = {f.name for f in dataclasses.fields(cfg)}
     for pid, ligado in habilitados.items():
         if pid.startswith("custom_"):
             continue  # o banco próprio usa o flag da engine que aponta
-        overrides[f"stock_{pid}_enabled"] = bool(ligado)
+        campo = f"stock_{pid}_enabled"
+        if campo in campos_cfg:
+            overrides[campo] = bool(ligado)
     return dataclasses.replace(cfg, **overrides)
 
 
@@ -1400,6 +1497,10 @@ def buscar_midia(payload: SearchMediaPayload, request: Request) -> dict[str, Any
         raise HTTPException(500, detail=f"Backbone não carregado: {_BACKBONE_ERROR}")
     # ⚠️ CORRIGIDO (23/09/2026): era `_, _, _, _cfg` — pegava o agent, não o config.
     cfg, _, _, _ = _get_backbone()
+    # ⚠️ CORRIGIDO (01/10/2026): max_results vinha cru do cliente —
+    # negativo quebrava o fatiamento interno dos provedores e
+    # gigantes estouravam a cota da API (Pexels limita a 80/página).
+    max_results = max(1, min(payload.max_results or 20, 100))
     try:
         # Chaves do usuário logado (ou global do .env) — não o singleton.
         cfg_usuario = _config_do_usuario(request) or cfg
@@ -1408,7 +1509,7 @@ def buscar_midia(payload: SearchMediaPayload, request: Request) -> dict[str, Any
             busca = db.pesquisar(
                 query=payload.query,
                 provider=payload.provider,
-                max_results=payload.max_results,
+                max_results=max_results,
                 apenas_fotos=payload.apenas_fotos,
                 apenas_videos=payload.apenas_videos,
             )
@@ -1417,14 +1518,14 @@ def buscar_midia(payload: SearchMediaPayload, request: Request) -> dict[str, Any
             # bancos habilitados do usuário, intercalando os resultados.
             # Antes: caía no stock_provider do config — só 1 banco respondia.
             busca = db.pesquisar_multi(
-                query=payload.query,
-                max_results=payload.max_results,
-                apenas_fotos=payload.apenas_fotos,
-                apenas_videos=payload.apenas_videos,
-                # ⚠️ 24/09/2026: termos EN da IA genérica quando o usuário
-                # configurou a chave (sem chave, muda nada na busca).
-                usar_ia=True,
-            )
+            query=payload.query,
+            max_results=max_results,
+            apenas_fotos=payload.apenas_fotos,
+            apenas_videos=payload.apenas_videos,
+            # ⚠️ 24/09/2026: termos EN da IA genérica quando o usuário
+            # configurou a chave (sem chave, muda nada na busca).
+            usar_ia=True,
+        )
         resultados = getattr(busca, "results", None)
         if resultados is None:
             # fallback: alguns builds antigos devolviam lista pura
@@ -1736,6 +1837,13 @@ def listar_jobs() -> list[dict[str, Any]]:
     for jid, j in _jobs.items():
         if j.get("status") != "done":
             continue
+        # ⚠️ CORRIGIDO (01/10/2026): transcrever_job() cria jobs em
+        # _jobs com tipo="transcricao". Eles NÃO são clipes — não têm
+        # MP4 nenhum (resultado=None). Antes esse filtro não existia
+        # e toda transcrição virava um card fantasma em "Meus clipes"
+        # (arquivo_nome="" → "Assistir"/"Baixar" davam 404).
+        if j.get("tipo") == "transcricao":
+            continue
         res = j.get("resultado") or {}
         entry = {
             "id": jid,
@@ -1801,8 +1909,11 @@ def servir_resultado_inline(job_id: str):
 @app.get("/api/clipes/{arquivo}", tags=["jobs"])
 def servir_clipe(arquivo: str, download: bool = False) -> FileResponse:
     """Serve um .mp4 direto da CLIPS_DIR (útil p/ órfãos sem job em memória)."""
-    # segurança: só arquivos .mp4 sem path traversal
-    if "/" in arquivo or ".." in arquivo or not arquivo.endswith(".mp4"):
+    # segurança: só arquivos .mp4 sem path traversal.
+    # ⚠️ CORRIGIDO (01/10/2026): faltava rejeitar "\\" e byte nulo —
+    # no Windows (INSTALAR-WINDOWS.bat) "..\\..\\x.mp4" escapava de CLIPS_DIR.
+    if ("/" in arquivo or "\\" in arquivo or "\x00" in arquivo
+            or ".." in arquivo or not arquivo.endswith(".mp4")):
         raise HTTPException(400, detail="Nome inválido")
     caminho = CLIPS_DIR / arquivo
     if not caminho.is_file():
@@ -1892,10 +2003,19 @@ def abrir_pasta_resultado(job_id: str) -> dict[str, Any]:
     mesmo PC do usuário, então 'abrir pasta' é o destino real do arquivo."""
     arquivo = _resultado_do_job(job_id)
     pasta = arquivo.parent.resolve()
-    # Segurança: só abre pastas dentro do OUTPUT_DIR do projeto.
-    try:
-        pasta.relative_to(OUTPUT_DIR.resolve())
-    except ValueError:
+    # Segurança: só abre pastas dentro do OUTPUT_DIR do projeto ou
+    # dentro do HOME do usuário — a UI só oferece destinos em
+    # Documentos/Desktop/Downloads/Vídeos/Música (sugerir-pastas),
+    # então um resultado fora dessas duas raízes é suspeito.
+    # ⚠️ CORRIGIDO (01/10/2026): a versão anterior comparava
+    # pasta == arquivo.parent.resolve() — sempre verdade por
+    # construção, o que desarmava a proteção por completo.
+    raizes_seguras = (OUTPUT_DIR.resolve(), Path.home().resolve())
+    pasta_ok = any(
+        pasta == raiz or raiz in pasta.parents
+        for raiz in raizes_seguras
+    )
+    if not pasta_ok:
         raise HTTPException(400, detail="Pasta fora do diretório de saída")
     try:
         if sys.platform.startswith("win"):

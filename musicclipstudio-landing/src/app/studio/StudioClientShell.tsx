@@ -164,6 +164,23 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
 
   const initialState = React.useMemo<StudioProjectState>(() => {
     if (typeof window === "undefined") return DEFAULT_STATE;
+    // ⚠️ NOVO (01/10/2026): "Criar novo projeto" (dashboard)
+    // chega com ?novo=1 — começa LIMPO, sem restaurar o clipe
+    // anterior do localStorage. Antes, ao abrir /studio/new a
+    // mídia do clipe passado reaparecia na etapa 05 e o usuário
+    // não sabia qual imagem/vídeo era de qual clipe. Sem o
+    // parâmetro, a restauração segue de pé: é ela que sobrevive
+    // a F5 e ao HMR.
+    const paramsNovo = new URLSearchParams(window.location.search);
+    if (paramsNovo.get("novo") === "1" && !paramsNovo.get("projeto")) {
+      window.localStorage.removeItem(STATE_KEY);
+      paramsNovo.delete("novo");
+      const qs = paramsNovo.toString();
+      window.history.replaceState(
+        null, "", window.location.pathname + (qs ? `?${qs}` : "")
+      );
+      return DEFAULT_STATE;
+    }
     try {
       const cru = window.localStorage.getItem(STATE_KEY);
       if (!cru) return DEFAULT_STATE;
