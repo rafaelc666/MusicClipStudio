@@ -2033,6 +2033,23 @@ def escolher_pasta_dialogo() -> dict[str, Any]:
         caminho = proc.stdout.strip()
         if caminho and _os.path.isdir(caminho):
             return {"ok": True, "caminho": caminho}
+        # ⚠️ CORRIGIDO (01/10/2026): quando o tkinter não consegue abrir
+        # (backend sem sessão gráfica, libtk ausente, DISPLAY inalcançável
+        # pelo processo detachado), o subprocess terminava com erro em
+        # stderr — mas run() sem check=True ENGOLIA o erro e a resposta
+        # dizia apenas "nenhuma pasta selecionada". A UI falhava calada
+        # e a pasta nunca era salva. Agora o motivo real volta junto,
+        # com a bandeira nativo_indisponivel para a UI oferecer a lista
+        # de pastas no lugar do diálogo.
+        if proc.returncode != 0 or proc.stderr.strip():
+            ultima = (
+                proc.stderr.strip() or f"exit code {proc.returncode}"
+            ).splitlines()[-1]
+            return {
+                "ok": False, "caminho": "",
+                "motivo": f"diálogo nativo indisponível: {ultima[:180]}",
+                "nativo_indisponivel": True,
+            }
         return {"ok": False, "caminho": "", "motivo": "nenhuma pasta selecionada"}
     except subprocess.TimeoutExpired:
         return {"ok": False, "caminho": "", "motivo": "timeout (60s)"}

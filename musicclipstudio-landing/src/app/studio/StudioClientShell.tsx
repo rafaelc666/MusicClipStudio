@@ -101,6 +101,13 @@ export interface StudioProjectState {
    *   1/1   → 1080×1080  (feed instagram quadrado)
    */
   formato: "9/16" | "16/9" | "3/4" | "4/3" | "1/1";
+  /**
+   * ⚠️ NOVO (01/10/2026) — pasta de destino do MP4 escolhida na
+   * etapa 06. Vazia = pasta padrão do MCS. Antes era useState local
+   * do Step6Gerar: F5/HMR perdia a escolha. Persiste no wizard
+   * (localStorage) junto com o resto do estado.
+   */
+  outputDir?: string;
   completedSteps: Partial<Record<StudioStepKey, boolean>>;
   activeStep: StudioStepKey;
 }

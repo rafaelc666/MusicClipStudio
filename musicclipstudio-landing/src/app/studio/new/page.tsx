@@ -3074,8 +3074,30 @@ function Step6Gerar() {
     download_api_url?: string;
     arquivo_nome?: string;
   } | null>(null);
-  // pasta onde o MP4 final vai parar (vazio = pasta padrão do MCS)
-  const [outputDir, setOutputDir] = React.useState<string>("");
+  // pasta onde o MP4 final vai parar (vazio = pasta padrão do MCS).
+  // ⚠️ CORRIGIDO (01/10/2026): era useState LOCAL — F5/HMR
+  // perdia a escolha. Agora vive no estado do wizard (localStorage).
+  const outputDir = state.outputDir ?? "";
+  const setOutputDir = (v: string) =>
+    setState((s) => ({ ...s, outputDir: v }));
+  // Sugestões de pasta (Documentos, Desktop, Downloads, …) via
+  // /api/sugerir-pastas: um clique, sem depender de diálogo
+  // nativo/tkinter nem de sessão gráfica no backend.
+  const [sugestoes, setSugestoes] = React.useState<
+    Array<{ nome: string; caminho: string }>
+  >([]);
+  React.useEffect(() => {
+    let vivo = true;
+    fetch(`${API_BASE}/api/sugerir-pastas`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (vivo && d.ok && Array.isArray(d.sugestoes)) {
+          setSugestoes(d.sugestoes);
+        }
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
   const [escolhendo, setEscolhendo] = React.useState(false);
   const [logs, setLogs] = React.useState<string[]>([]);
   /* ⚠️ number, não ReturnType<typeof window.setTimeout>: no browser o retorno é
@@ -3338,7 +3360,9 @@ function Step6Gerar() {
         accent="ok"
       />
 
-      {/* Pasta de destino: botao "Escolher pasta" abre dialog nativo (tkinter). */}
+      {/* Pasta de destino: lista de sugestões (sempre funciona,
+          sem GUI) + campo manual + diálogo nativo (tkinter,
+          opcional — pode estar indisponível no backend). */}
       <Card>
         <CardHeader>
           <CardTitle>Pasta de destino do arquivo</CardTitle>
@@ -3346,37 +3370,85 @@ function Step6Gerar() {
             Onde o .MP4 final vai parar. Sem seleção = pasta padrão do MCS.
           </CardDescription>
         </CardHeader>
-        <div className="flex items-center gap-3 px-4 pb-4">
-          <Button
-            size="sm"
-            variant="outline"
-            loading={escolhendo}
-            disabled={!!jobId && !done && !falha}
-            onClick={async () => {
-              setEscolhendo(true);
-              try {
-                const r = await fetch(`${API_BASE}/api/escolher-pasta`);
-                const d = await r.json();
-                if (d.ok && d.caminho) setOutputDir(d.caminho);
-              } catch { toast.error("Falha ao abrir o seletor de pasta"); }
-              finally { setEscolhendo(false); }
-            }}
-          >
-            <FolderOpen className="h-3.5 w-3.5" /> Escolher pasta…
-          </Button>
-          {outputDir ? (
-            <span className="text-[12px] font-mono text-fg-1 truncate max-w-[360px]" title={outputDir}>
-              {outputDir}
-            </span>
-          ) : (
-            <span className="text-[12px] text-fg-3">padrão MCS (output/clipes)</span>
+        <CardContent className="space-y-3">
+          {sugestoes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {sugestoes.map((s) => (
+                <button
+                  key={s.caminho}
+                  type="button"
+                  disabled={!!jobId && !done && !falha}
+                  title={s.caminho}
+                  onClick={() => setOutputDir(s.caminho)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                    outputDir === s.caminho
+                      ? "border-neon/60 bg-neon/10 text-neon"
+                      : "border-white/10 bg-bg-2/60 text-fg-2 hover:border-neon/30 hover:text-fg-0",
+                  )}
+                >
+                  {s.nome}
+                </button>
+              ))}
+            </div>
           )}
-          {outputDir && (
-            <button type="button" onClick={() => setOutputDir("")} className="text-[11px] text-fg-3 underline hover:text-fg-1 ml-2">
-              limpar
-            </button>
-          )}
-        </div>
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              variant="outline"
+              loading={escolhendo}
+              disabled={!!jobId && !done && !falha}
+              onClick={async () => {
+                setEscolhendo(true);
+                try {
+                  const r = await fetch(`${API_BASE}/api/escolher-pasta`);
+                  const d = await r.json();
+                  if (d.ok && d.caminho) {
+                    setOutputDir(d.caminho);
+                  } else if (d.motivo) {
+                    // ⚠️ CORRIGIDO (01/10/2026): ok:false era
+                    // ignorado EM SILÊNCIO — o tkinter falhava,
+                    // o campo nunca atualizava e não avisava
+                    // nada (sensação de "não está salvando").
+                    // Agora avisa; sem diálogo nativo, a lista
+                    // acima ou o campo manual resolvem.
+                    toast.error("Não abriu o seletor de pasta", {
+                      description: d.nativo_indisponivel
+                        ? `${d.motivo} — escolha na lista acima ou digite o caminho.`
+                        : d.motivo,
+                    });
+                  } else {
+                    toast.info("Nenhuma pasta selecionada");
+                  }
+                } catch { toast.error("Falha ao abrir o seletor de pasta"); }
+                finally { setEscolhendo(false); }
+              }}
+            >
+              <FolderOpen className="h-3.5 w-3.5" /> Escolher pasta…
+            </Button>
+            <Input
+              value={outputDir}
+              disabled={!!jobId && !done && !falha}
+              onChange={(e) => setOutputDir(e.target.value)}
+              placeholder="ou digite o caminho da pasta…"
+              className="h-8 flex-1 text-[12px] font-mono"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            {outputDir ? (
+              <>
+                <span className="text-[12px] font-mono text-fg-1 truncate max-w-[360px]" title={outputDir}>
+                  {outputDir}
+                </span>
+                <button type="button" onClick={() => setOutputDir("")} className="text-[11px] text-fg-3 underline hover:text-fg-1 ml-2">
+                  limpar
+                </button>
+              </>
+            ) : (
+              <span className="text-[12px] text-fg-3">padrão MCS (output/clipes)</span>
+            )}
+          </div>
+        </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-4">
