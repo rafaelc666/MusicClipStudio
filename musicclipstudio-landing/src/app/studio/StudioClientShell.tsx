@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Toaster, toast } from "sonner";
-import { ArrowLeft, Bell, HelpCircle, Command as CmdIcon, Save, FolderOpen, KeyRound, LogOut, Loader2, FilePlus2 } from "lucide-react";
+import { ArrowLeft, Command as CmdIcon, Save, FolderOpen, KeyRound, LogOut, Loader2, FilePlus2 } from "lucide-react";
 import { StudioSidebar, STUDIO_STEPS, type StudioStepKey } from "@/components/studio/StudioSidebar";
 import { StudioIntro, useIntroDeSessao } from "@/components/studio/StudioIntro";
 import { AuthProvider, useAuth } from "@/components/studio/AuthProvider";
@@ -519,12 +519,11 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
                 <Save className="h-3.5 w-3.5" />
                 {salvando ? "Salvando…" : "Salvar"}
               </Button>
-              <Button size="icon" variant="ghost" aria-label="Notificações">
-                <Bell className="h-[17px] w-[17px]" />
-              </Button>
-              <Button size="icon" variant="ghost" aria-label="Ajuda">
-                <HelpCircle className="h-[17px] w-[17px]" />
-              </Button>
+              {/* ⚠️ CORRIGIDO (06/10/2026): os dois ícones Bell (Notificações)
+                  e HelpCircle (Ajuda) estavam no header SEM onClick — clicáveis
+                  que não faziam nada. Não há sistema de notificação local nem
+                  página de ajuda própria; removidos em vez de deixar botão
+                  morto (confunde o usuário). */}
               {/* Usuário logado + Sair */}
               {usuario && (
                 <span className="flex items-center gap-2 border-l border-white/10 pl-3">
