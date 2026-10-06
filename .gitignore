@@ -35,6 +35,8 @@ _e2e*.log
 _backend.log
 _frontend.log
 _req_tmp/
+_tmp_*.py
+backend/_tmp_*.py
 .workbuddy-ai/
 
 # ── Backups e lixeira locais ──────────────────────────────
