@@ -23,6 +23,8 @@ interface ProjetoCard {
   artist: string;
   status: "concluido" | "andamento" | "rascunho";
   duracao: string;
+  /** segundos reais (número puro) — usado pelo dashboard p/ somar minutos. */
+  duracaoSeg: number;
   thumbnail: string;
   updatedAt: number;
   stepsDone: number;
@@ -51,6 +53,7 @@ function paraCard(p: ProjetoSalvo, idx: number): ProjetoCard {
     artist: (p as { artist?: string }).artist || "—",
     status,
     duracao: dur ? `${Math.round(dur)}s` : "—",
+    duracaoSeg: dur ? Number(dur) : 0,
     thumbnail: THUMBS[idx % THUMBS.length],
     updatedAt: p.updatedAt ?? p.createdAt ?? Date.now(),
     stepsDone,
@@ -97,16 +100,30 @@ export default function StudioDashboardPage() {
     if (ok) setProjetos((ps) => ps.filter((p) => p.id !== id));
   };
 
-  // Stats do dashboard — "Projetos" vem do banco real.
-  const stats = React.useMemo(
-    () => [
+  // ⚠️ CORRIGIDO (06/10/2026): 3 dos 4 números do dashboard viviam com "—"
+  // fixo — "Minutos renderizados", "Clipes publicados" e "Tempo médio".
+  // Agora todos os quatro são derivados do que JÁ vem do backend:
+  //   · `projetos` (SQLite /api/projetos) traz duracao da música por projeto
+  //   · `clipes`   (/api/jobs) traz os renders concluídos + órfãos no disco
+  // "Tempo médio" não tinha fonte (não medimos duração de render por job);
+  // foi substituído por "Em andamento", que é real e útil.
+  const stats = React.useMemo(() => {
+    const emAndamento = projetos.filter((p) => p.status === "andamento").length;
+    // segundos reais de áudio carregados nos projetos (o wizard grava
+    // musica.duracao na hora do upload); converte para minutos.
+    const segTotal = projetos.reduce((acc, p) => {
+      const d = Number(p.duracaoSeg ?? 0);
+      return acc + (isFinite(d) ? d : 0);
+    }, 0);
+    const minutos = segTotal > 0 ? `${Math.round(segTotal / 60)}min` : "—";
+    const nClipes = clipes.length;
+    return [
       { label: "Projetos", value: String(projetos.length), icon: STAT_ICONS[0], accent: "neon" },
-      { label: "Minutos renderizados", value: "—", icon: STAT_ICONS[1], accent: "ok" },
-      { label: "Clipes publicados", value: "—", icon: STAT_ICONS[2], accent: "violet" },
-      { label: "Tempo médio", value: "—", icon: STAT_ICONS[3], accent: "warn" },
-    ],
-    [projetos.length],
-  );
+      { label: "Minutos renderizados", value: minutos, icon: STAT_ICONS[1], accent: "ok" },
+      { label: "Clipes publicados", value: String(nClipes), icon: STAT_ICONS[2], accent: "violet" },
+      { label: "Em andamento", value: String(emAndamento), icon: STAT_ICONS[3], accent: "warn" },
+    ];
+  }, [projetos, clipes]);
 
   // Spotlight: faz o brilho seguir o cursor nos cards (só CSS var, zero estado)
   const seguirCursor = (e: React.MouseEvent<HTMLElement>) => {
@@ -151,10 +168,11 @@ export default function StudioDashboardPage() {
                   Criar novo projeto
                 </Button>
               </Link>
-              <Button variant="outline" size="lg" className="gap-2">
-                <Play className="h-4 w-4" />
-                Assistir tour de 1 min
-              </Button>
+              {/* ⚠️ CORRIGIDO (06/10/2026): o botão "Assistir tour de 1 min"
+                  não tinha onClick e não existia vídeo de tour em nenhum lugar
+                  do projeto — clicável e mentiroso. Removido. Se um tour real
+                  for gravado, o botão volta ligando num <dialog> ou route
+                  /studio/tour. */}
             </div>
           </div>
 
