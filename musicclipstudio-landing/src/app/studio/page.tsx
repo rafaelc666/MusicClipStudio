@@ -59,11 +59,9 @@ function paraCard(p: ProjetoSalvo, idx: number): ProjetoCard {
 
 const STAT_ICONS = [FolderOpen, Film, Rocket, Clock] as const;
 
-const TEMPLATES = [
-  { id: "t1", name: "Épico Cinematográfico", desc: "Batidas fortes, estilo Vox Editorial", tag: "9:16", color: "from-neon/30 to-violet/20" },
-  { id: "t2", name: "Lo-fi Relaxante",       desc: "Imagens calmas, tipografia arredondada", tag: "16:9", color: "from-ok/25 to-neon/15" },
-  { id: "t3", name: "Pop Animado",           desc: "Transições rápidas, kinetic titles",     tag: "9:16", color: "from-warn/30 to-err/15" },
-];
+// ⚠️ CORRIGIDO (06/10/2026): TEMPLATES agora vive em ./templates-data e é
+// compartilhado com o wizard, que lê ?template=<id> e aplica título/formato.
+import { TEMPLATES } from "./templates-data";
 
 export default function StudioDashboardPage() {
   const [projetos, setProjetos] = React.useState<ProjetoCard[]>([]);
@@ -198,9 +196,10 @@ export default function StudioDashboardPage() {
             <h2 className="display-lg mt-1">Templates rápidos</h2>
             <p className="text-[13px] text-fg-2">Estilos prontos — adapte letra e siga.</p>
           </div>
-          <Link href="/studio/templates" className="text-[12px] text-neon hover:underline">
-            Ver todos <ArrowUpRight className="inline h-3 w-3" />
-          </Link>
+          {/* ⚠️ CORRIGIDO (06/10/2026): "Ver todos" apontava pra
+              /studio/templates — rota que não existe (404). Como a
+              lista é curta (3) e fixa, o link não tem para onde ir;
+              removido. */}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

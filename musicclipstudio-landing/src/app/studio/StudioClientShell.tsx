@@ -13,6 +13,7 @@ import { ProvedoresDialog } from "@/components/studio/ProvedoresDialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { salvarProjeto, obterProjeto } from "@/lib/projetos-api";
+import { obterTemplate } from "./templates-data";
 
 /**
  * Contexto simples para os passos do wizard compartilharem estado do projeto
@@ -249,6 +250,32 @@ export function StudioClientShell({ children }: { children: React.ReactNode }) {
         window.history.replaceState(null, "", url);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Aplica template via ?template=<id> (link dos cards do dashboard) ──
+  // ⚠️ CORRIGIDO (06/10/2026): o dashboard tinha cards ligando em
+  // `/studio/new?template=t1` mas o wizard nunca LIA o parâmetro — o clique
+  // simplesmente abria o wizard vazio. Agora o template é aplicado quando
+  // presente: preenche título, tema visual e formato de saída.
+  // Depois remove ?template= da URL pra não reaplicar em navegação interna.
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tid = params.get("template");
+    if (!tid) return;
+    const tpl = obterTemplate(tid);
+    if (tpl) {
+      setState((s) => ({
+        ...s,
+        title: tpl.title || s.title,
+        temaVisual: tpl.theme,
+        formato: tpl.formato,
+      }));
+      params.delete("template");
+      const qs = params.toString();
+      const url = window.location.pathname + (qs ? "?" + qs : "");
+      window.history.replaceState(null, "", url);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
